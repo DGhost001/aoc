@@ -13,7 +13,7 @@ type TId   = string[3];
        constructor init(id, left, right : TId);
      end;
 const
-  InputFileName = '..\INP\DAY8_INP.TXT';
+  InputFileName = 'INP\DAY8_INP.TXT';
 constructor TNode.init(id, left, right : TId);
 begin
  id_      := id;
