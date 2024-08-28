@@ -1,5 +1,5 @@
 program Day8;
-uses jstring,dequeue,itemhandler;
+uses crt,jstring,dequeue,itemhandler;
 
 type TId   = string[3];
      PNode = ^TNode;
@@ -126,6 +126,94 @@ begin
   writeln('Required Steps: ',steps);
 end;
 
+
+procedure part2(nodes: PDeQueue;
+                way  : PJString);
+  procedure findStartNodes(nodes        : PDeQueue;
+                           var nodeList : array of PDeQueueIterator);
+  var i : word;
+      it: PDeQueueIterator;
+  begin
+   for i:= LOW(nodeList) to HIGH(nodeList) do
+   nodeList[i]:=NIL;
+   it := nodes^.first;
+   i  := LOW(nodeList);
+   while it <> NIL do begin
+     if PNode(it^.at)^.id_[3] = 'A' then begin
+       if i > HIGH(nodeList) then runError(300);
+       nodeList[i] := it;
+       inc(i);
+     end;
+     it := it^.next;
+   end;
+  end;
+
+  procedure printNodes(nodeList : array of PDeQueueIterator);
+  var i:word;
+  begin
+    write(char($0d));
+    for i:=LOW(nodeList) to HIGH(nodeList) do
+     if nodeList[i] <> NIL then write(PNode(nodeList[i]^.at)^.id_,' ');
+  end;
+
+  function allFinished(nodeList : array of PDeQueueIterator):boolean;
+  var result : boolean;
+      i,c      : word;
+  begin
+   result := True;
+   c:=HIGH(nodeList)+1;
+
+   for i:=LOW(nodeList) to HIGH(nodeList) do begin
+     if (nodeList[i] <> NIL) and (PNode(nodeList[i]^.at)^.id_[3] <> 'Z') then begin
+       result := False;
+       dec(c);
+     end else if nodeList[i] = NIL then dec(c);
+   end;
+
+   if c > LOW(nodeList) then begin
+    printNodes(nodeList);
+    {writeln;}
+   end;
+
+
+   allFinished := result;
+  end;
+
+  procedure multiStep(var nodeList : array of PDeQueueIterator; c : char);
+  var i:word;
+  begin
+    for i:=LOW(nodeList) to HIGH(nodeList) do
+     if nodeList[i] <> NIL then nodeList[i]:=step(nodeList[i],c);
+  end;
+
+var nodeList :array [0..8] of PDeQueueIterator;
+    result: longint;
+    itW   : PJStringIterator;
+begin
+  result := 0;
+  findStartNodes(nodes,nodeList);
+
+  itW := way^.first;
+
+  while not allFinished(nodeList) do begin
+    if not itW^.valid then begin
+      itW^.dispose;
+      itW := way^.first;
+    end;
+    inc(result);
+    if (result mod 1000) = 0 then begin
+    { write(chr($0D),result);}
+    { printNodes(nodeList); write(itW^.at^,' ',result);}
+     if keypressed then halt(1);
+    end;
+    multiStep(nodeList,itW^.at^);
+    itW^.next;
+  end;
+  itW^.dispose;
+
+  writeln('Part 2 number of steps:', result);
+end;
+
 var
   nodes: PDeQueue;
   way  : PJString;
@@ -151,6 +239,8 @@ begin
   mesh(nodes);
 
   part1(nodes,way);
+
+  part2(nodes,way);
 
   nodes^.dispose;
   way^.dispose;
