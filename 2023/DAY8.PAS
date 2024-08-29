@@ -135,7 +135,7 @@ procedure part2(nodes: PDeQueue;
       it: PDeQueueIterator;
   begin
    for i:= LOW(nodeList) to HIGH(nodeList) do
-   nodeList[i]:=NIL;
+    nodeList[i]:=NIL;
    it := nodes^.first;
    i  := LOW(nodeList);
    while it <> NIL do begin
@@ -172,7 +172,7 @@ procedure part2(nodes: PDeQueue;
 
    if c > LOW(nodeList) then begin
     printNodes(nodeList);
-    {writeln;}
+    writeln;
    end;
 
 
@@ -202,8 +202,8 @@ begin
     end;
     inc(result);
     if (result mod 1000) = 0 then begin
-    { write(chr($0D),result);}
-    { printNodes(nodeList); write(itW^.at^,' ',result);}
+     write(chr($0D)); {,result);}
+     printNodes(nodeList); write(itW^.at^,' ',result);
      if keypressed then halt(1);
     end;
     multiStep(nodeList,itW^.at^);
@@ -238,7 +238,7 @@ begin
   writeln('Mashing the nodes...');
   mesh(nodes);
 
-  part1(nodes,way);
+  {part1(nodes,way);}
 
   part2(nodes,way);
 
