@@ -1,24 +1,51 @@
 program Day8;
-uses crt,jstring,dequeue,itemhandler;
+uses crt,jstring,dequeue,itemhandler,stdint;
 
-type TId   = string[3];
+const
+  InputFileName = 'INP\DAY8_INP.TXT';
+  MaxWaySteps   = 512;
+
+type TNodeInfo = record
+       numberOfSteps : comp;
+       pos           : PDeQueueIterator;
+     end;
+
+     TNodeInfoCache  = array[0..MaxWaySteps -1] of TNodeInfo;
+     PNodeInfoCache  = ^TNodeInfoCache;
+     PWay = ^TWay;
+     TWay            = record
+       maxSteps : word;
+       steps : array [0 ..MaxWaySteps -1] of char;
+     end;
+
+     TId   = string[3];
      PNode = ^TNode;
      TNode = object(ItemType)
-       id_     : TId;
-       leftId_ : TId;
-       rightId_: TId;
-       left_   : PDeQueueIterator;
-       right_  : PDeQueueIterator;
+       id_       : TId;
+       leftId_   : TId;
+       rightId_  : TId;
+       left_     : PDeQueueIterator;
+       right_    : PDeQueueIterator;
+       nodeInfo_ : PNodeInfoCache;
 
        constructor init(id, left, right : TId);
      end;
-const
-  InputFileName = 'INP\DAY8_INP.TXT';
+
 constructor TNode.init(id, left, right : TId);
+var i:integer;
 begin
  id_      := id;
  leftId_  := left;
  rightId_ := right;
+
+ if id[3] = 'Z' then begin
+   nodeInfo_ := new(PNodeInfoCache);
+   for i:=0 to MaxWaySteps - 1 do begin
+     nodeInfo_^[i].numberOfSteps := 0;
+     nodeInfo_^[i].pos := NIL;
+   end;
+ end else nodeInfo_ := NIL;
+
  left_    := NIL;
  right_   := NIL;
 end;
@@ -63,6 +90,27 @@ begin
   end;
 end;
 
+function findNumberOfSteps(way       : PWay;
+                           offset    : word;
+                           start     : PDeQueueIterator;
+                           var target: PDeQueueIterator): longint;
+var it    : PDeQueueIterator;
+    count : longint;
+begin
+  count := 0;
+  it := start;
+
+  repeat
+   it := step(it,way^.steps[(offset + count) mod way^.maxSteps]);
+   inc(count);
+   if (count mod 10000) = 0 then begin
+     write('.');
+     if keypressed then halt(1);
+   end;
+  until PNode(it^.at)^.id_[3] ='Z';
+  target:=it;
+  findNumberOfSteps:=count;
+end;
 
 function parseNode(line :PJString):PNode;
 var id, left, right:TId;
@@ -128,20 +176,24 @@ end;
 
 
 procedure part2(nodes: PDeQueue;
-                way  : PJString);
+                way  : PWay);
+
   procedure findStartNodes(nodes        : PDeQueue;
-                           var nodeList : array of PDeQueueIterator);
+                           var nodeList : array of TNodeInfo);
   var i : word;
       it: PDeQueueIterator;
   begin
-   for i:= LOW(nodeList) to HIGH(nodeList) do
-    nodeList[i]:=NIL;
+   for i:= LOW(nodeList) to HIGH(nodeList) do begin
+    nodeList[i].pos:=NIL;
+    nodeList[i].numberOfSteps:=0;
+   end;
    it := nodes^.first;
    i  := LOW(nodeList);
    while it <> NIL do begin
      if PNode(it^.at)^.id_[3] = 'A' then begin
        if i > HIGH(nodeList) then runError(300);
-       nodeList[i] := it;
+       nodeList[i].pos:=it;
+       nodeList[i].numberOfSteps:=0;
        inc(i);
      end;
      it := it^.next;
@@ -156,69 +208,59 @@ procedure part2(nodes: PDeQueue;
      if nodeList[i] <> NIL then write(PNode(nodeList[i]^.at)^.id_,' ');
   end;
 
-  function allFinished(nodeList : array of PDeQueueIterator):boolean;
-  var result : boolean;
-      i,c      : word;
-  begin
-   result := True;
-   c:=HIGH(nodeList)+1;
-
-   for i:=LOW(nodeList) to HIGH(nodeList) do begin
-     if (nodeList[i] <> NIL) and (PNode(nodeList[i]^.at)^.id_[3] <> 'Z') then begin
-       result := False;
-       dec(c);
-     end else if nodeList[i] = NIL then dec(c);
-   end;
-
-   if c > LOW(nodeList) then begin
-    printNodes(nodeList);
-    writeln;
-   end;
-
-
-   allFinished := result;
-  end;
-
-  procedure multiStep(var nodeList : array of PDeQueueIterator; c : char);
-  var i:word;
-  begin
-    for i:=LOW(nodeList) to HIGH(nodeList) do
-     if nodeList[i] <> NIL then nodeList[i]:=step(nodeList[i],c);
-  end;
-
-var nodeList :array [0..8] of PDeQueueIterator;
-    result: longint;
-    itW   : PJStringIterator;
+var nodeList :array [0..8] of TNodeInfo;
+    max   : comp;
+    tmp   : comp;
+    offset: longint;
+    i  : word;
 begin
-  result := 0;
   findStartNodes(nodes,nodeList);
+  max := -1;
 
-  itW := way^.first;
+  for i:= 0 to HIGH(nodeList) do
+    with nodeList[i] do begin
+      if pos <> NIL then
+        numberOfSteps:=findNumberOfSteps(way,0,pos,pos);
+      if max < numberOfSteps then max := numberOfSteps;
+    end;
 
-  while not allFinished(nodeList) do begin
-    if not itW^.valid then begin
-      itW^.dispose;
-      itW := way^.first;
+  i:=0;
+
+  while i < 8 do with nodeList[i] do begin
+    if pos = NIL then inc(i) else
+    if numberOfSteps > max then begin
+      max := numberOfSteps;
+      if i>0 then write(chr($d),max);
+      i:= 0;
+      if keypressed then halt(1);
+    end else if numberOfSteps = max then begin
+     inc(i);
+     write(' ',i);
+    end else begin
+     tmp := way^.maxSteps;
+     offset := round(numberOfSteps-(numberOfSteps / tmp)*tmp);
+     if PNode(pos^.at)^.nodeInfo_^[offset].numberOfSteps <=0 then
+        PNode(pos^.at)^.nodeInfo_^[offset].numberOfSteps :=
+        findNumberOfSteps(way,
+                          offset,
+                          pos,
+                          PNode(pos^.at)^.nodeInfo_^[offset].pos);
+     pos:=PNode(pos^.at)^.nodeInfo_^[offset].pos;
+     numberOfSteps:=numberOfSteps+PNode(pos^.at)^.nodeInfo_^[offset].numberOfSteps;
     end;
-    inc(result);
-    if (result mod 1000) = 0 then begin
-     write(chr($0D)); {,result);}
-     printNodes(nodeList); write(itW^.at^,' ',result);
-     if keypressed then halt(1);
-    end;
-    multiStep(nodeList,itW^.at^);
-    itW^.next;
   end;
-  itW^.dispose;
 
-  writeln('Part 2 number of steps:', result);
+  writeln('Part 2 number of steps:', max);
 end;
 
 var
+  i    : word;
   nodes: PDeQueue;
   way  : PJString;
+  away : TWay;
   line : PJString;
   input: Text;
+  it   : PJStringIterator;
 begin
   writeln('Loading Data...');
   nodes :=new(PDeQueue,init);
@@ -226,6 +268,19 @@ begin
   reset(input);
   line :=ReadLine(input);
   way := line^.stripWhiteSpace;
+  i:=0;
+
+  writeln('Number of steps loaded: ',way^.size);
+
+  it:= way^.first;
+  while it^.valid do
+  begin
+   away.maxSteps:=i+1;
+   away.steps[i]:=it^.at^;
+   it^.next;
+   inc(i);
+  end;
+  it^.dispose;
   line^.dispose;
   readln(input);
   while not eof(input) do begin
@@ -235,12 +290,12 @@ begin
   end;
   close(input);
 
-  writeln('Mashing the nodes...');
+  writeln('Mashing ',nodes^.size,' nodes...');
   mesh(nodes);
 
   {part1(nodes,way);}
 
-  part2(nodes,way);
+  part2(nodes,@away);
 
   nodes^.dispose;
   way^.dispose;
