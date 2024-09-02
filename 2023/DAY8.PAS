@@ -1,3 +1,4 @@
+{$N+ $E+}
 program Day8;
 uses crt,jstring,dequeue,itemhandler,stdint;
 
@@ -8,6 +9,7 @@ const
 type TNodeInfo = record
        numberOfSteps : comp;
        pos           : PDeQueueIterator;
+       isCircle      : boolean;
      end;
 
      TNodeInfoCache  = array[0..MaxWaySteps -1] of TNodeInfo;
@@ -43,6 +45,7 @@ begin
    for i:=0 to MaxWaySteps - 1 do begin
      nodeInfo_^[i].numberOfSteps := 0;
      nodeInfo_^[i].pos := NIL;
+     nodeInfo_^[i].isCircle := false;
    end;
  end else nodeInfo_ := NIL;
 
@@ -178,6 +181,13 @@ end;
 procedure part2(nodes: PDeQueue;
                 way  : PWay);
 
+  function divMul(a,b : comp) : comp;
+  var tmp: extended;
+  begin
+    tmp := a / b;
+    divMul := trunc(tmp) * b;
+  end;
+
   procedure findStartNodes(nodes        : PDeQueue;
                            var nodeList : array of TNodeInfo);
   var i : word;
@@ -211,11 +221,12 @@ procedure part2(nodes: PDeQueue;
 var nodeList :array [0..8] of TNodeInfo;
     max   : comp;
     tmp   : comp;
+    tmp2  : comp;
     offset: longint;
-    i  : word;
+    i,i2  : word;
 begin
   findStartNodes(nodes,nodeList);
-  max := -1;
+  max := 1.0e10;
 
   for i:= 0 to HIGH(nodeList) do
     with nodeList[i] do begin
@@ -225,28 +236,43 @@ begin
     end;
 
   i:=0;
+  i2:= 0;
 
   while i < 8 do with nodeList[i] do begin
     if pos = NIL then inc(i) else
     if numberOfSteps > max then begin
       max := numberOfSteps;
-      if i>0 then write(chr($d),max);
       i:= 0;
       if keypressed then halt(1);
     end else if numberOfSteps = max then begin
      inc(i);
-     write(' ',i);
+     if i>i2 then i2:=i;
+     if i>1 then write(chr($d),max,' ',i,'/',i2);
     end else begin
      tmp := way^.maxSteps;
-     offset := round(numberOfSteps-(numberOfSteps / tmp)*tmp);
-     if PNode(pos^.at)^.nodeInfo_^[offset].numberOfSteps <=0 then
+     offset := round(numberOfSteps-divMul(numberOfSteps,tmp));
+     if PNode(pos^.at)^.nodeInfo_^[offset].numberOfSteps <=0 then begin
         PNode(pos^.at)^.nodeInfo_^[offset].numberOfSteps :=
         findNumberOfSteps(way,
                           offset,
                           pos,
                           PNode(pos^.at)^.nodeInfo_^[offset].pos);
-     pos:=PNode(pos^.at)^.nodeInfo_^[offset].pos;
-     numberOfSteps:=numberOfSteps+PNode(pos^.at)^.nodeInfo_^[offset].numberOfSteps;
+
+        PNode(pos^.at)^.nodeInfo_^[offset].isCircle:=
+         (divMul(PNode(pos^.at)^.nodeInfo_^[offset].numberOfSteps, way^.maxSteps) =
+            PNode(pos^.at)^.nodeInfo_^[offset].numberOfSteps) and
+         (pos = PNode(pos^.at)^.nodeInfo_^[offset].pos);
+     end;
+     tmp2:= PNode(pos^.at)^.nodeInfo_^[offset].numberOfSteps;
+     if PNode(pos^.at)^.nodeInfo_^[offset].isCircle then begin
+       tmp:= (divMul(max - numberOfSteps, tmp2)) + numberOfSteps;
+
+       if tmp <> max then numberOfSteps := tmp + tmp2
+       else numberOfSteps := tmp;
+     end else begin
+       pos:=PNode(pos^.at)^.nodeInfo_^[offset].pos;
+       numberOfSteps:=numberOfSteps+tmp2;
+     end;
     end;
   end;
 
