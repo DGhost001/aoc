@@ -734,9 +734,9 @@ end;
 procedure fromLongInt64;
 begin
     a[0] := i and $ff;
-    a[1] := (i shr 8) and $ff;
-    a[2] := (i shr 16) and $ff;
-    a[3] := (i shr 24) and $ff;
+    a[1] := (i and $ff00) shr 8;
+    a[2] := (i and $ff0000) shr 16;
+    a[3] := (i and $ff000000) shr 24;
     if i < 0 then begin
         a[4] := $ff;
         a[5] := $ff;

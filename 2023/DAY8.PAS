@@ -5,9 +5,10 @@ uses crt,jstring,dequeue,itemhandler,stdint;
 const
   InputFileName = 'INP\DAY8_INP.TXT';
   MaxWaySteps   = 512;
+  StartValue :Uint64_t =($00,$50,$8a,$71,$19,$13,$00,$00);
 
 type TNodeInfo = record
-       numberOfSteps : comp;
+       numberOfSteps : Uint64_t;
        pos           : PDeQueueIterator;
        isCircle      : boolean;
      end;
@@ -43,7 +44,7 @@ begin
  if id[3] = 'Z' then begin
    nodeInfo_ := new(PNodeInfoCache);
    for i:=0 to MaxWaySteps - 1 do begin
-     nodeInfo_^[i].numberOfSteps := 0;
+     nodeInfo_^[i].numberOfSteps := zero64;
      nodeInfo_^[i].pos := NIL;
      nodeInfo_^[i].isCircle := false;
    end;
@@ -181,11 +182,12 @@ end;
 procedure part2(nodes: PDeQueue;
                 way  : PWay);
 
-  function divMul(a,b : comp) : comp;
-  var tmp: extended;
+  procedure divMul(a,b : uint64_t;var result:uint64_t);
+  var tmp: uint64_t;
   begin
-    tmp := a / b;
-    divMul := trunc(tmp) * b;
+    div64(a,b,tmp);
+    mul64(a,b);
+    result:=a;
   end;
 
   procedure findStartNodes(nodes        : PDeQueue;
@@ -195,7 +197,7 @@ procedure part2(nodes: PDeQueue;
   begin
    for i:= LOW(nodeList) to HIGH(nodeList) do begin
     nodeList[i].pos:=NIL;
-    nodeList[i].numberOfSteps:=0;
+    nodeList[i].numberOfSteps:=zero64;
    end;
    it := nodes^.first;
    i  := LOW(nodeList);
@@ -203,7 +205,7 @@ procedure part2(nodes: PDeQueue;
      if PNode(it^.at)^.id_[3] = 'A' then begin
        if i > HIGH(nodeList) then runError(300);
        nodeList[i].pos:=it;
-       nodeList[i].numberOfSteps:=0;
+       nodeList[i].numberOfSteps:=zero64;
        inc(i);
      end;
      it := it^.next;
@@ -219,20 +221,24 @@ procedure part2(nodes: PDeQueue;
   end;
 
 var nodeList :array [0..8] of TNodeInfo;
-    max   : comp;
-    tmp   : comp;
-    tmp2  : comp;
+    max   : Uint64_t;
+    tmp   : Uint64_t;
+    tmp2  : Uint64_t;
+    rest  : Uint64_t;
     offset: longint;
     i,i2  : word;
 begin
   findStartNodes(nodes,nodeList);
-  max := 1.0e10;
+
+  (* Initial guess, needs to be lower!  *)
+  (* Specific to the input ...          *)
+  max := StartValue;
 
   for i:= 0 to HIGH(nodeList) do
     with nodeList[i] do begin
       if pos <> NIL then
-        numberOfSteps:=findNumberOfSteps(way,0,pos,pos);
-      if max < numberOfSteps then max := numberOfSteps;
+        fromLongInt64(findNumberOfSteps(way,0,pos,pos),numberOfSteps);
+      if isLess64(max, numberOfSteps) then max := numberOfSteps;
     end;
 
   i:=0;
@@ -240,43 +246,50 @@ begin
 
   while i < 8 do with nodeList[i] do begin
     if pos = NIL then inc(i) else
-    if numberOfSteps > max then begin
+    if isGreater64(numberOfSteps, max) then begin
       max := numberOfSteps;
       i:= 0;
       if keypressed then halt(1);
-    end else if numberOfSteps = max then begin
+    end else if isEqual64(numberOfSteps, max) then begin
      inc(i);
      if i>i2 then i2:=i;
-     if i>1 then write(chr($d),max,' ',i,'/',i2);
+     if i>1 then write(chr($d),Uint64toStr(max),' ',i,'/',i2);
     end else begin
-     tmp := way^.maxSteps;
-     offset := round(numberOfSteps-divMul(numberOfSteps,tmp));
-     if PNode(pos^.at)^.nodeInfo_^[offset].numberOfSteps <=0 then begin
-        PNode(pos^.at)^.nodeInfo_^[offset].numberOfSteps :=
-        findNumberOfSteps(way,
+     fromLongInt64(way^.maxSteps,tmp);
+     tmp2:=numberOfSteps;
+     div64(tmp2,tmp,rest);
+     offset:=toLongInt64(rest);
+     if not isGreater64(PNode(pos^.at)^.nodeInfo_^[offset].numberOfSteps,zero64) then begin
+        fromLongInt64(findNumberOfSteps(way,
                           offset,
                           pos,
-                          PNode(pos^.at)^.nodeInfo_^[offset].pos);
+                          PNode(pos^.at)^.nodeInfo_^[offset].pos),
+                      PNode(pos^.at)^.nodeInfo_^[offset].numberOfSteps);
+        fromLongInt64(way^.maxSteps,tmp);
+        tmp2:=PNode(pos^.at)^.nodeInfo_^[offset].numberOfSteps;
+        div64(tmp2,tmp,rest);
 
         PNode(pos^.at)^.nodeInfo_^[offset].isCircle:=
-         (divMul(PNode(pos^.at)^.nodeInfo_^[offset].numberOfSteps, way^.maxSteps) =
-            PNode(pos^.at)^.nodeInfo_^[offset].numberOfSteps) and
+         isEqual64(rest,zero64) and
          (pos = PNode(pos^.at)^.nodeInfo_^[offset].pos);
      end;
      tmp2:= PNode(pos^.at)^.nodeInfo_^[offset].numberOfSteps;
      if PNode(pos^.at)^.nodeInfo_^[offset].isCircle then begin
-       tmp:= (divMul(max - numberOfSteps, tmp2)) + numberOfSteps;
+       tmp:=max;
+       sub64(tmp,numberOfSteps);
+       divMul(tmp, tmp2, tmp);
+       add64(tmp, numberOfSteps);
 
-       if tmp <> max then numberOfSteps := tmp + tmp2
-       else numberOfSteps := tmp;
+       if not isEqual64(tmp, max) then add64(tmp, tmp2);
+       numberOfSteps := tmp;
      end else begin
        pos:=PNode(pos^.at)^.nodeInfo_^[offset].pos;
-       numberOfSteps:=numberOfSteps+tmp2;
+       add64(numberOfSteps,tmp2);
      end;
     end;
   end;
 
-  writeln('Part 2 number of steps:', max);
+  writeln('Part 2 number of steps:', uint64ToStr(max));
 end;
 
 var
@@ -319,7 +332,7 @@ begin
   writeln('Mashing ',nodes^.size,' nodes...');
   mesh(nodes);
 
-  {part1(nodes,way);}
+  part1(nodes,way);
 
   part2(nodes,@away);
 
