@@ -1,6 +1,6 @@
 program day10;
-
-uses Dequeue, Itemhandler, graph;
+{$N+ $E+}
+uses Dequeue, Itemhandler, graph, sort;
 
 type TPos = record
        x : byte;
@@ -10,22 +10,33 @@ type TPos = record
      TField = array[0..139,0..139] of char;
      TPosTuple = array[1..2] of TPos;
 
-     PSeed = ^TSeed;
-     TSeed = object(ItemType)
-       pos_ : TPos;
+     TPoint = record
+       x : real;
+       y : real;
+     end;
 
-       constructor init(pos : TPos);
+     PPolyPoint = ^TPolyPoint;
+     TPolyPoint = object(ItemType)
+       pos_ : TPoint;
 
+       constructor init(pos   : TPos);
+       constructor copy(other : PPolyPoint);
+       function compare(other:PItemType):TRelation;virtual;
      end;
 
 const NullPos : TPos = (x : 255; y : 255);
       InputFile = 'INP\DAY10_IN.TXT';
 
-constructor TSeed.init(pos : TPos);
+constructor TPolyPoint.init(pos : TPos);
 begin
- pos_ := pos;
+  pos_.x := pos.x + 0.5;
+  pos_.y := pos.y + 0.5;
 end;
 
+constructor TPolyPoint.copy(other : PPolyPoint);
+begin
+  pos_ := other^.pos_;
+end;
 
 procedure west(pos: TPos; var result : TPos);
 begin
@@ -82,23 +93,26 @@ begin
     getField := #0;
 end;
 
-procedure getPositions(pos     : TPos;
+function getPositions(pos     : TPos;
                       var field: TField;
                       var next : TPosTuple
-                      );
+                      ):boolean;
+var result : boolean;
 begin
+  result := false;
   if not pequal(pos, NullPos) then
      case field[pos.x,pos.y] of
           '-': begin west(pos,next[1]);   east(pos,next[2]);   end;
           '|': begin north(pos, next[1]); south(pos, next[2]); end;
-          'L': begin north(pos, next[1]); east(pos, next[2]);  end;
-          'J': begin north(pos, next[1]); west(pos, next[2]);  end;
-          '7': begin south(pos, next[1]); west(pos, next[2]);  end;
-          'F': begin south(pos, next[1]); east(pos, next[2]);  end;
+          'L': begin north(pos, next[1]); east(pos, next[2]); result := true; end;
+          'J': begin north(pos, next[1]); west(pos, next[2]); result := true;  end;
+          '7': begin south(pos, next[1]); west(pos, next[2]); result := true;  end;
+          'F': begin south(pos, next[1]); east(pos, next[2]); result := true;  end;
      else begin next[1] := NullPos; next[2]:= NullPos; end;
   end else begin
     next[1] := NullPos; next[2]:= NullPos;
   end;
+  getPositions := result;
 end;
 
 procedure findStart(var field : TField; var pos : TPos);
@@ -146,7 +160,6 @@ begin
 
   steps := 1;
   while not pequal(npos, start) do begin
-    setField(pos,field,'*'); (* Mark the way, as we need it for part 2 *)
     inc(steps);
     if steps > 140*140 then runError(300);
     if (steps mod 500)=0 then write('.');
@@ -160,64 +173,132 @@ begin
       npos := options[1];
     end;
   end;
-  setField(pos,field,'*'); (* Mark also the last step, so we close the loop *)
   writeln;
   runPart1 := (steps+1) div 2;
 end;
 
-function runPart2(var field : TField) : word;
-var queue      : PDeQueue;
-    pos        : TPos;
-    directions : array[1..3] of TPos;
-    pushed     : array[1..3] of boolean;
-    i,j        : integer;
-    tmp        : char;
-    count      : word;
+function getIntersections(polygon : PDeQueue; line : integer):PDeQueue;
+var it, itn : PDeQueueIterator;
+    result  : PDeQueue;
+    p1, p2  : TPoint;
+    pos     : TPos;
 begin
-  queue := new(PDeQueue,init);
+  result := new(PDequeue,init);
 
-  (* We know for sure 0,0 is outside of the loop *)
-  pos.x := 0;
-  pos.y := 0;
+  it := polygon^.first;
+  itn:= it^.next;
 
-  queue^.pushBack(new(PSeed,init(pos)));
+  while itn <> NIL do begin
+    p1 := PPolyPoint(it^.at)^.pos_;
+    p2 := PPolyPoint(itn^.at)^.pos_;
 
-  while queue^.size > 0 do begin
-    for i:= 1 to 3 do pushed[i] := false;
+    if (trunc(p1.x) = trunc(p2.x)) and  (* We can have only vertical intersections *)
+       ((p1.y < line) and (p2.y > line)) or
+       ((p1.y > line) and (p2.y < line)) then begin
+       pos.x := trunc(p1.x);
+       pos.y := line;
+       result^.pushBack(new(PPolyPoint, init(pos)));
+    end;
+    it := itn;
+    itn := itn^.next;
+  end;
 
-    pos := PSeed(queue^.at(0))^.pos_;
-    queue^.popFront;
+  (* we can't guarantee that the polygon is clock or anti clockwise *)
+  (* But we know that the left border is not part of the polygon    *)
+  (* So by sorting we bring the intersections in a sensible order   *)
+  sortQueue(result);
 
-    while not pequal(pos,NullPos) do begin
-      (*Stop Scanning the line if it has a * or # *)
-      tmp := getField(pos,field);
-      if (tmp <> '*') and (tmp <> '#') then begin
-        setField(pos,field,'#');
-        north(pos, directions[1]);
-        south(pos, directions[2]);
-        west(pos, directions[3]);
+  getIntersections := result;
+end;
 
-        for i:= 1 to 3 do
-          if not pequal(directions[i], NullPos) then begin
-            tmp := getField(directions[i], field);
-            if not pushed[i] and (tmp <> '#') and (tmp <> '*') then begin
-              pushed[i] := true;
-              queue^.pushBack(new(PSeed,init(directions[i])));
-            end
-            (* Reset the stride, if we encounter a wall or partial filled spot *)
-            else if (tmp = '#') or (tmp = '*') then pushed[i] := false;
-          end;
+function runPart2(var field : TField) : word;
+var polygon         : PDeQueue;
+    intersections   : PDeQueue;
+    pos,npos,start  : TPos;
+    inital          : array[1..4] of TPosTuple;
+    directions      : array[1..3] of TPos;
+    pushed          : array[1..3] of boolean;
+    i,j, x1, x2     : integer;
+    tmp             : char;
+    count,steps     : word;
+    options         : TPosTuple;
+    it, itn         : PDequeueIterator;
+begin
+  (* Step 1 convert the bitmap into an polygon by tracing the path *)
+  (* below is basically the same as part 1, but this time we trace *)
+  (* path into a polygon. *)
+  polygon := new(PDeQueue,init);
+  findStart(field,start);
+  pos:=start;
+  north(pos,npos); getPositions(npos, field, inital[1]);
+  south(pos,npos); getPositions(npos, field, inital[2]);
+  west(pos, npos); getPositions(npos, field, inital[3]);
+  east(pos, npos); getPositions(npos, field, inital[4]);
 
-         east(pos,pos);
-      end else pos := NullPos;
+  i := 1;
+  npos := NullPos;
+  while pequal(npos, NullPos) do begin
+    for j:= 1 to 2 do
+      if pequal(inital[i][j], start) then
+        case i of
+            1:north(start,npos);
+            2:south(start,npos);
+            3:west(start,npos);
+            4:east(start,npos);
+        else runError(300);
+        end;
+    inc(i);
+  end;
+
+  steps := 1;
+  while not pequal(npos, start) do begin
+    inc(steps);
+    if steps > 140*140 then runError(300);
+    if (steps mod 500)=0 then write('.');
+    getPositions(npos, field, options);
+
+    tmp := getField(pos,field);
+    if (tmp <> '|') and (tmp <> '-') then
+      polygon^.pushBack(new(PPolyPoint,init(pos))); (* Create a point a the corners *)
+
+    if pequal(pos,options[1]) then begin
+      pos := npos;
+      npos:= options[2];
+    end else begin
+      pos := npos;
+      npos := options[1];
     end;
   end;
-  dispose(queue);
+  polygon^.pushBack(new(PPolyPoint,init(start))); (* Duplicate the start, makes things easier *)
+  writeln;
+
+  (* Step 2 shoot rays for every scanline and see where the intersections are *)
+  for i:= 0 to 139 do begin
+    write(#13, 'Line: ',i,' ');
+    intersections := getIntersections(polygon, i);
+    write(intersections^.size,'      ');
+    it := intersections^.first;
+    if it = nil then continue;
+
+    itn:= it^.next;
+
+    while (it <> NIL) and (itn <> NIL) do begin
+      x1 := trunc(PPolyPoint(it^.at)^.pos_.x) + 1;
+      x2 := trunc(PPolyPoint(itn^.at)^.pos_.x) - 1;
+      for j:= x1 to x2 do field[j,i] := '#';
+      it := itn^.next;
+      itn:= it^.next;
+    end;
+
+    intersections^.dispose;
+  end;
+
+  polygon^.dispose;
 
   count := 0;
   for i:=0 to 139 do
    for j:=0 to 139 do
-     if (field[i,j] <> '#') and (field[i,j] <> '*') then inc(count);
+     if (field[i,j] = '#') then inc(count);
 
   runPart2 := count;
 end;

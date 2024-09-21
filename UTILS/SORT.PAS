@@ -1,10 +1,35 @@
 unit sort;
 (* Implementation of a simple QSort for an integer array *)
-
 interface
+  uses DeQueue,ItemHandler;
+
+  procedure sortQueue(queue : PDeQueue);
   procedure quickSort(var a: array of integer);
   function  binarySearch(const a: array of integer; what : integer) : integer;
 implementation
+procedure sortQueue(queue : PDeQueue);
+var  it1, it2: PDeQueueIterator;
+     change : boolean;
+begin
+  change := True;
+  if queue^.size > 1 then begin
+    while change do begin
+      it1 := queue^.first;
+      it2 := it1 ^.next;
+      change := false;
+
+      while (it1 <> NIL) and (it2 <> NIL) do begin
+        if it1^.at^.compare(it2^.at) = Bigger then begin
+          it1^.swap(it2);
+          change := True;
+        end;
+        it1:= it2;
+        it2:= it2^.next;
+      end;
+    end;
+  end;
+end;
+
   procedure quickSort(var a: array of integer);
     procedure qSort(low, high : integer);
     var left, right : integer;
