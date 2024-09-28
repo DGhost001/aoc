@@ -733,10 +733,10 @@ end;
 
 procedure fromLongInt64;
 begin
-    a[0] := i and $ff;
-    a[1] := (i and $ff00) shr 8;
-    a[2] := (i and $ff0000) shr 16;
-    a[3] := (i and $ff000000) shr 24;
+    a[0] := byte(i); i := i shr 8;
+    a[1] := byte(i); i := i shr 8;
+    a[2] := byte(i); i := i shr 8;
+    a[3] := byte(i);
     if i < 0 then begin
         a[4] := $ff;
         a[5] := $ff;

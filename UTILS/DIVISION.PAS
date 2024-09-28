@@ -110,10 +110,10 @@ begin
   fromLongInt64(1234567890,a);
   fromLongInt64(654321,b);
 
-  divmnu(a,d,a,b);
+  divmnu(c,d,a,b);
 
   writeln('----==== Results ====----');
-  writeln('Div: ',uint64ToStr(a), '; 1886');
+  writeln('Div: ',uint64ToStr(c), '; 1886');
   writeln('Mod: ',uint64ToStr(d), '; 518484');
 
 end.
