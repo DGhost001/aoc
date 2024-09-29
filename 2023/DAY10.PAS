@@ -38,6 +38,16 @@ begin
   pos_ := other^.pos_;
 end;
 
+function TPolyPoint.compare(other:PItemType):TRelation;
+var otherPoint : PPolyPoint;
+begin
+  otherPoint := PPolyPoint(other);
+
+  if otherPoint^.pos_.x > self.pos_.x then compare:=Smaller else
+  if otherPoint^.pos_.x < self.pos_.x then compare:=Bigger else
+  compare := Equal;
+end;
+
 procedure west(pos: TPos; var result : TPos);
 begin
  if pos.x > 0 then begin
@@ -252,6 +262,7 @@ begin
 
   steps := 1;
   while not pequal(npos, start) do begin
+    setField(pos,field,'*');
     inc(steps);
     if steps > 140*140 then runError(300);
     if (steps mod 500)=0 then write('.');
@@ -269,10 +280,13 @@ begin
       npos := options[1];
     end;
   end;
+  setField(pos,field,'*');
   polygon^.pushBack(new(PPolyPoint,init(start))); (* Duplicate the start, makes things easier *)
   writeln;
 
   (* Step 2 shoot rays for every scanline and see where the intersections are *)
+  count := 0;
+
   for i:= 0 to 139 do begin
     write(#13, 'Line: ',i,' ');
     intersections := getIntersections(polygon, i);
@@ -285,7 +299,12 @@ begin
     while (it <> NIL) and (itn <> NIL) do begin
       x1 := trunc(PPolyPoint(it^.at)^.pos_.x) + 1;
       x2 := trunc(PPolyPoint(itn^.at)^.pos_.x) - 1;
-      for j:= x1 to x2 do field[j,i] := '#';
+      for j:= x1 to x2 do begin
+       if field[j,i] <> '*' then begin
+         field[j,i] := '#';
+         inc(count);
+       end;
+      end;
       it := itn^.next;
       itn:= it^.next;
     end;
@@ -294,11 +313,6 @@ begin
   end;
 
   polygon^.dispose;
-
-  count := 0;
-  for i:=0 to 139 do
-   for j:=0 to 139 do
-     if (field[i,j] = '#') then inc(count);
 
   runPart2 := count;
 end;
@@ -321,10 +335,13 @@ begin
   initGraph(i,j,'c:\bp\bgi');
 
   for i:= 0 to 139 do
-   for j:= 0 to 139 do
-     if field[i,j] = '#' then putpixel(i,j,Green) else
-     if field[i,j] = '*' then putpixel(i,j,Yellow) else
-     putpixel(i,j,LightGray);
+   for j:= 0 to 139 do begin
+     if field[i,j] = '#' then setFillStyle(SolidFill,Green) else
+     if field[i,j] = '*' then setFillStyle(SolidFill,Yellow) else
+     setFillStyle(SolidFill,LightGray);
+
+     bar(i*3,j*3,i*3+2,j*3+2);
+   end;
 
   readln;
   closeGraph;
