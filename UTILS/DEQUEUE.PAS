@@ -2,11 +2,12 @@ unit DeQueue;
 
 interface
 
-uses ItemHandler;
+uses ItemHandler, ProgressBar;
 
-    type        
+    type
         (* Type definiton for the dequeue iterator *)
-        PDeQueueIterator = ^TDeQueueIterator; 
+        PDeQueueIterator = ^TDeQueueIterator;
+        TQueueLambda     = procedure(it:PDeQueueIterator);
         TDeQueueIterator = object
             destructor done;
 
@@ -45,6 +46,10 @@ uses ItemHandler;
             function first: PDeQueueIterator;
             function last: PDeQueueIterator;
             function size: word;
+
+            procedure forEachP(lambda : TQueueLambda; progress : PProgressBar);
+            procedure forEach(lambda : TQueueLambda);
+
 
             private
                 first_ : PDeQueueIterator;
@@ -245,6 +250,25 @@ end;
 function TDeQueue.size;
 begin
     size:= self.length_;
+end;
+
+procedure TDeQueue.forEachP;
+var it :PDeQueueIterator;
+begin
+  it := first;
+  while it <> NIL do begin
+    lambda(it);
+    if progress <> NIL then progress^.step(1);
+    it := it^.next;
+  end;
+end;
+
+procedure TDeQueue.forEach;
+var progress : PProgressBar;
+begin
+  progress := new(PProgressBar,init(size,'Processing...'));
+  forEachP(lambda, progress);
+  progress^.dispose;
 end;
 
 begin

@@ -78,22 +78,22 @@ begin
   end;
 end;
 
-function part1(universe : PDeQueue) : double;
-var sum     : double;
-   it1, it2 : PDequeueIterator;
+var sum : double;
+
+procedure run(it1 : PDequeueIterator); far;
+var it2 : PDequeueIterator;
 begin
-  sum := 0.0;
-  it1 := universe^.first;
-  while it1 <> NIL do begin
    it2 := it1^.next;
    while it2 <> NIL do begin
     sum := sum + PGalaxy(it1^.at)^.distance(PGalaxy(it2^.at));
     it2 := it2^.next;
    end;
-   it1 := it1^.next;
-   write('.');
-  end;
-  writeln;
+end;
+
+function part1(universe : PDeQueue) : double;
+begin
+  sum := 0.0;
+  universe^.foreach(run);
   part1 := sum;
 end;
 
