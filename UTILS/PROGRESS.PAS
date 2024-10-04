@@ -24,14 +24,18 @@ implementation
 uses crt;
 
 constructor TProgressBar.init(const max : longint; const title:string);
+var x,y : word;
 begin
  progress_ := 0;
  maxCount_ := max;
  line      := Hi(WindMax)+1;
  title_    := title;
  update_   := max div 100;
+ x := WhereX;
+ y := WhereY;
 
  window(1,1,80,line-1);
+ gotoxy(x,y);
 
  draw;
 end;
