@@ -4,6 +4,7 @@ interface
 uses DeQueue,JString,stdint;
 
 function parseUintArray(it : PDeQueueIterator; var numbers: array of Uint64_t) : word;
+function countLines(var input : Text): longint;
 
 implementation
 
@@ -19,6 +20,16 @@ begin
 
   parseUintArray := count;
 end;
-
+function countLines(var input : Text): longint;
+var count : longint;
+begin
+  count := 0;
+  while not eof(input) do begin
+    readln(input);
+    inc(count);
+  end;
+  countLines := count;
+  reset(input);
+end;
 begin
 end.

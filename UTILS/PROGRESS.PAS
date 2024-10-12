@@ -16,6 +16,7 @@ type PProgressBar = ^TProgressBar;
 
        procedure   draw;
        procedure   step(progress : longint);
+       procedure   stepAbsolute(progress: longint);
        procedure   dispose;
      end;
 
@@ -110,6 +111,18 @@ end;
 procedure TProgressBar.step;
 begin
  inc(progress_,progress);
+
+ if progress_ > maxCount_ then progress := maxCount_;
+ if (progress_ - lastUpdate_ > update_) or
+    (progress_ = maxCount_)
+ then
+  draw;
+end;
+
+procedure TProgressBar.stepAbsolute;
+begin
+ progress_ := progress;
+ if progress_ < 0 then progress_ := 0;
 
  if progress_ > maxCount_ then progress := maxCount_;
  if (progress_ - lastUpdate_ > update_) or
