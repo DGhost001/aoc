@@ -1,10 +1,11 @@
 program day12;
 uses jstring, dequeue, progressBar, utils,crt;
 type TState = (Unknown, Broken, Working);
+     TStateArray = array [0..23] of TState;
      TReport = record
        numberOfSprings     : byte;
        numberControlGroups : byte;
-       springStates : array [0..23] of TState;
+       springStates : TStateArray;
        control      : array [0..11] of byte;
      end;
 const InputFile = 'INP\DAY12_IN.TXT';
@@ -99,8 +100,91 @@ begin
   end;
 end;
 
+procedure printSprings(const states : TStateArray; const len : byte);
+var pos : byte;
+begin
+  for pos := 0 to len-1 do
+   case states[pos] of
+      Unknown: write('?');
+      Working: write('.');
+      Broken : write('#');
+   end;
+  writeln;
+end;
+
 function part1(var input : Text):longint;
 var report : TReport;
+    final  : TStateArray;
+  function countOptions2(pos, group, run: byte) : word;
+  var finished : boolean;
+      count    : word;
+  begin
+    with report do begin
+     finished := false;
+     count := 0;
+     repeat
+       if (pos >= numberOfSprings) and (
+        (
+         (run > 0) and (group = numberControlGroups - 1) and (control[group] = run)
+        ) or (group >= numberControlGroups)) then begin
+         inc(count);
+         printSprings(final, report.numberOfSprings);
+         finished := true;
+       end else if (pos >= numberOfSprings) or
+             (group > numberControlGroups) or
+             ((group < numberControlGroups) and (run > control[group]))
+       then begin
+         finished := true;
+       end else begin
+         final[pos] := springStates[pos];
+         case springStates[pos] of
+           Broken : begin
+                   if group < numberControlGroups then begin
+                     inc(run);
+                     inc(pos);
+                   end else begin
+                     count := 0;
+                     finished := true;
+                   end
+                  end;
+           Working: begin
+                  inc(pos);
+                    if (run > 0) and (run = control[group]) then begin
+                      run  := 0;
+                      inc(group);
+                    end else if run > 0 then begin
+                      count := 0;
+                      finished := true;
+                    end;
+                  end;
+           Unknown: begin
+                  if (run > 0) and ( run < control[group]) then begin
+                    final[pos] := Broken;
+                    inc(pos);
+                    inc(run);
+                  end else if (group < numberControlGroups) and (run = control[group]) then begin
+                    final[pos] := Working;
+                    run := 0;
+                    inc(group);
+                    inc(pos);
+                  end else if (group = numberControlGroups) and (run = 0) then begin
+                    final[pos] := Working;
+                    inc(pos);
+                  end else begin
+                    final[pos] := Broken;
+                    count := count + countOptions2(pos+1, group, 1);
+                    final[pos] := Working;
+                    count := count + countOptions2(pos+1, group, 0);
+                    finished := true;
+                  end;
+           end;
+         end;
+       end;
+     until finished;
+    end;
+
+    countOptions2 := count;
+  end;
 
   function countOptions(const pgood, pfailed, pstart : byte) : word;
   var result : word;
@@ -112,13 +196,7 @@ var report : TReport;
    result := 0;
    if validReport(report) then begin
      result := 1;
-     for start := 0 to report.numberOfSprings-1 do
-     case report.springStates[start] of
-        Unknown: write('?');
-        Working: write('.');
-        Broken : write('#');
-     end;
-     writeln;
+     printSprings(report.springStates, report.numberOfSprings);
    end
    else with report do begin
      while (start < numberOfSprings) and
@@ -142,6 +220,7 @@ var line : PJString;
     sline: PJString;
     items: PDequeue;
     count: longint;
+    c1, c2: word;
     good, failed : byte;
     p : TProgressbar;
 begin
@@ -157,10 +236,16 @@ begin
     items := sline^.split(' ');
 
     parseReport(items, report);
-    countSpringTypes(report, good, failed);
-
-    count:=count + countOptions(good, failed, 0);
-    writeln('------------------');
+   (* countSpringTypes(report, good, failed);
+    c1:= countOptions(good, failed, 0);
+    writeln('------------------'); *)
+    c2:= countOptions2(0, 0, 0);
+    count := count + c2;
+(*    if c1 <> c2 then begin
+      writeln('Error in line ', p.progress_,' ',c1,'<>',c2);
+      runError(300);
+    end; *)
+    writeln('===================');
     items^.dispose;
     sline^.dispose;
     line^.dispose;
