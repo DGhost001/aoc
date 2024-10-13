@@ -1,6 +1,10 @@
 program day12;
 uses jstring, dequeue, progressBar, utils,crt;
-type TState = (Unknown, Broken, Working);
+type PCacheLine = ^TCacheLine;
+     TCacheLine = array [0..63,0..1] of longint;
+     TCache     = array [0..127] of PCacheLine;
+
+     TState = (Unknown, Broken, Working);
      TStateArray = array [0..23] of TState;
      TReport = record
        numberOfSprings     : byte;
@@ -10,53 +14,47 @@ type TState = (Unknown, Broken, Working);
      end;
 const InputFile = 'INP\DAY12_IN.TXT';
 
-function validReport(const report : TReport) : boolean;
-var result    : boolean;
-    group     : byte;
-    pos       : byte;
-    controlPos: byte;
+var cache : TCache;
+    ch    : longint;
+procedure flushCache;
+var line : byte;
 begin
-  result := true;
-  with report do begin
-    group      := 0;
-    controlPos := 0;
-    for pos := 0 to numberOfSprings-1 do begin
-      case springStates[pos] of
-        Unknown: begin result := false; break; end; (* One State unknown, still broken *)
-        Broken : inc(group);
-        Working: begin
-          if group > 0 then begin
-           if (controlPos < numberControlGroups) and
-              (control[controlPos] = group) then begin
-             inc(controlPos)
-           end else begin
-             result := false;
-             break;
-           end
-          end;
-          group := 0;
-        end;
-      end;
+  writeln('Cache hits: ',ch);
+  ch:=0;
+  for line := 0 to 127 do
+    if cache[line] <> NIL then begin
+      dispose(cache[line]);
+      cache[line] := NIL;
     end;
-    if (group > 0) and
-       (controlPos < numberControlGroups) and
-       (control[controlPos] = group) then begin
-       group := 0;
-       inc(controlPos);
-    end;
-  end;
-  validReport := (controlPos = report.numberControlGroups) and (group = 0) and result;
 end;
 
-procedure countSpringTypes(const report: TReport; var good, failed : byte);
-var pos : byte;
+procedure addToCache(const pos, group, run : byte; const value : longint);
+var i,j : byte;
 begin
-  with report do begin
-    failed := 0;
-    for pos := 0 to numberControlGroups-1 do
-       inc(failed, control[pos]);
-    good := numberOfSprings - failed;
+  if cache[pos] = NIL then begin
+    cache[pos] := new(PCacheLine);
+    for i:=0 to 63 do begin
+     cache[pos]^[i,0] := -1;
+     cache[pos]^[i,1] := -1;
+    end;
   end;
+
+  cache[pos]^[group][run] := value;
+end;
+
+function checkCache(const pos, group, run : byte; var value : longint) : boolean;
+begin
+  if (cache[pos] <> NIL) and (cache[pos]^[group,run] <> -1) then begin
+    value := cache[pos]^[group,run];
+    checkCache := true;
+    inc(ch);
+  end else checkCache := false;
+end;
+
+procedure initCache;
+var line : byte;
+begin
+  for line := 0 to 127 do cache[line] := NIL;
 end;
 
 procedure parseReport(const items : PDequeue;  var report : TReport);
@@ -112,123 +110,98 @@ begin
   writeln;
 end;
 
-function part1(var input : Text):longint;
-var report : TReport;
-    final  : TStateArray;
-  function countOptions2(pos, group, run: byte) : word;
+function count(const report : TReport):longint;
+  function countOptions(pos, group, run: byte) : word;
   var finished : boolean;
-      count    : word;
+      count    : longint;
+      p,g,r    : byte;
   begin
-    with report do begin
-     finished := false;
-     count := 0;
-     repeat
-       if (pos >= numberOfSprings) and (
-        (
-         (run > 0) and (group = numberControlGroups - 1) and (control[group] = run)
-        ) or (group >= numberControlGroups)) then begin
-         inc(count);
-         printSprings(final, report.numberOfSprings);
-         finished := true;
-       end else if (pos >= numberOfSprings) or
-             (group > numberControlGroups) or
-             ((group < numberControlGroups) and (run > control[group]))
-       then begin
-         finished := true;
-       end else begin
-         final[pos] := springStates[pos];
-         case springStates[pos] of
-           Broken : begin
-                   if group < numberControlGroups then begin
-                     inc(run);
-                     inc(pos);
-                   end else begin
-                     count := 0;
-                     finished := true;
-                   end
+    p := pos;
+    g := group;
+    r := run;
+
+    if not checkCache(p,g,r,count) then
+      with report do begin
+       finished := false;
+       count := 0;
+       repeat
+         if (pos >= numberOfSprings) and (
+          (
+           (run > 0) and (group = numberControlGroups - 1) and (control[group] = run)
+          ) or (group >= numberControlGroups)) then begin
+           inc(count);
+           finished := true;
+         end else if (pos >= numberOfSprings) or
+               (group > numberControlGroups) or
+               ((group < numberControlGroups) and (run > control[group]))
+         then begin
+           finished := true;
+         end else begin
+           case springStates[pos] of
+             Broken : begin
+                     if group < numberControlGroups then begin
+                       inc(run);
+                       inc(pos);
+                     end else begin
+                       count := 0;
+                       finished := true;
+                     end
+                    end;
+             Working: begin
+                      inc(pos);
+                      if (run > 0) and (run = control[group]) then begin
+                        run  := 0;
+                        inc(group);
+                      end else if run > 0 then begin
+                        count := 0;
+                        finished := true;
+                      end;
                   end;
-           Working: begin
-                  inc(pos);
-                    if (run > 0) and (run = control[group]) then begin
-                      run  := 0;
+             Unknown: begin
+                    if (run > 0) and ( run < control[group]) then begin
+                      inc(pos);
+                      inc(run);
+                    end else if (group < numberControlGroups) and (run = control[group]) then begin
+                      run := 0;
                       inc(group);
-                    end else if run > 0 then begin
-                      count := 0;
+                      inc(pos);
+                    end else if (group = numberControlGroups) and (run = 0) then begin
+                      inc(pos);
+                    end else begin
+                      count := count + countOptions(pos+1, group, 1);
+                      count := count + countOptions(pos+1, group, 0);
                       finished := true;
                     end;
-                  end;
-           Unknown: begin
-                  if (run > 0) and ( run < control[group]) then begin
-                    final[pos] := Broken;
-                    inc(pos);
-                    inc(run);
-                  end else if (group < numberControlGroups) and (run = control[group]) then begin
-                    final[pos] := Working;
-                    run := 0;
-                    inc(group);
-                    inc(pos);
-                  end else if (group = numberControlGroups) and (run = 0) then begin
-                    final[pos] := Working;
-                    inc(pos);
-                  end else begin
-                    final[pos] := Broken;
-                    count := count + countOptions2(pos+1, group, 1);
-                    final[pos] := Working;
-                    count := count + countOptions2(pos+1, group, 0);
-                    finished := true;
-                  end;
+             end;
            end;
          end;
-       end;
-     until finished;
-    end;
+       until finished;
+       addToCache(p,g,r,count);
+      end;
 
-    countOptions2 := count;
+    countOptions := count;
   end;
+begin
+  flushCache;
+  count := countOptions(0,0,0);
+end;
 
-  function countOptions(const pgood, pfailed, pstart : byte) : word;
-  var result : word;
-      good, failed, start : byte;
-  begin
-   good   := pgood;
-   failed := pfailed;
-   start  := pstart;
-   result := 0;
-   if validReport(report) then begin
-     result := 1;
-     printSprings(report.springStates, report.numberOfSprings);
-   end
-   else with report do begin
-     while (start < numberOfSprings) and
-           (springStates[start] <> Unknown) do
-           inc(start);
-     if start < numberOfSprings then begin
-       if failed > 0 then begin
-         springStates[start] := Broken;
-         result:= result + countOptions(good, failed - 1, start + 1);
-       end;
-       if good > 0 then begin
-         springStates[start] := Working;
-         result := result + countOptions(good - 1, failed, start + 1);
-       end;
-       springStates[start] := Unknown;
-     end;
-   end;
-   countOptions := result;
-  end;
+
+function part1(var input : Text):longint;
 var line : PJString;
     sline: PJString;
     items: PDequeue;
-    count: longint;
+    c: longint;
     c1, c2: word;
     good, failed : byte;
     p : TProgressbar;
+    report: TReport;
 begin
 
   p.init(countLines(input),'Thinking...');
   clrscr;
   writeln('--- Start ---');
-  count := 0;
+  c:= 0;
   while not eof(input) do begin
     line := readLine(input);
     sline:= line^.stripWhiteSpace;
@@ -236,16 +209,8 @@ begin
     items := sline^.split(' ');
 
     parseReport(items, report);
-   (* countSpringTypes(report, good, failed);
-    c1:= countOptions(good, failed, 0);
-    writeln('------------------'); *)
-    c2:= countOptions2(0, 0, 0);
-    count := count + c2;
-(*    if c1 <> c2 then begin
-      writeln('Error in line ', p.progress_,' ',c1,'<>',c2);
-      runError(300);
-    end; *)
-    writeln('===================');
+    c2:= count(report);
+    c := c + c2;
     items^.dispose;
     sline^.dispose;
     line^.dispose;
@@ -253,12 +218,13 @@ begin
   end;
 
   p.done;
-  part1 := count;
+  part1 := c;
 end;
 
 var input : Text;
     p1    : longint;
 begin
+  initCache;
   assign(input, InputFile);
   reset(input);
 
