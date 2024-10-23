@@ -36,27 +36,20 @@ var options    : TMirrorPos;
     newOptions : TMirrorPos;
     offset     : byte;
     line       : byte;
+    result     : byte;
 begin
-  options := [1..dim - 2];
-  for line := 0 to dim - 1 do begin
-    newOptions := [];
-    for offset := 1 to dim - 2 do begin
-      if (offset in options) and
-         (isMirror(offset, dim, map[line]))
-      then newOptions := newOptions + [offset];
-    end;
-    options := newOptions;
-    if options = [] then break;
-  end;
-
-  if options = [] then getMirror := MaxDim
-  else begin
-    for offset := 0 to dim do
-      if offset in options then begin
-        getMirror := offset;
+  result := MaxDim;
+  for offset := 0 to dim-2 do begin
+    for line := 0 to offset do begin
+      if ( line + offset + 1 >= dim ) then break;
+      if ( map[line + offset + 1] <> map[offset - line] ) then begin
+        result := MaxDim;
         break;
-      end;
+      end else result := offset;
+    end;
+    if result <> MaxDim then break;
   end;
+  getMirror := result;
 end;
 
 procedure loadNextMap(var input : Text; var map : TMap);
@@ -78,8 +71,8 @@ begin
        inc(vdim);
        for pos := 1 to hdim do begin
          if line[pos] = '#' then begin
-           horizontal[vdim] := horizontal[vdim] + [pos - 1];
-           vertical[pos]    := vertical[pos] + [vdim - 1];
+           horizontal[vdim-1] := horizontal[vdim-1] + [pos - 1];
+           vertical[pos-1]    := vertical[pos-1] + [vdim - 1];
          end;
        end;
       end;
@@ -98,10 +91,10 @@ begin
   while not eof(input) do begin
     loadNextMap(input, map);
     p.step(map.vdim+1);
-    tmp := getMirror(map.horizontal, map.hdim);
-    if tmp < MaxDim then inc(sum,tmp);
-    tmp := getMirror(map.vertical, map.vdim);
-    if tmp < MaxDim then inc(sum,tmp*100);
+    tmp := getMirror(map.horizontal, map.vdim);
+    if tmp < MaxDim then inc(sum,100*(tmp+1));
+    tmp := getMirror(map.vertical, map.hdim);
+    if tmp < MaxDim then inc(sum,tmp+1);
   end;
   p.done;
   part1 := sum;
