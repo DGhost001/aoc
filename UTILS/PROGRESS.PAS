@@ -1,6 +1,8 @@
 unit ProgressBar;
-
 interface
+{$N+} {$E+} (*Enable emulation and Co-Processor*)
+
+uses clock;
 type PProgressBar = ^TProgressBar;
      TProgressBar = object
        line       : byte;    (* Window coordinates *)
@@ -8,6 +10,7 @@ type PProgressBar = ^TProgressBar;
        progress_  : longint;
        update_    : longint;
        lastUpdate_: longint;
+       start_     : TClock;
 
        title_     : string;
 
@@ -23,7 +26,6 @@ type PProgressBar = ^TProgressBar;
 implementation
 
 uses crt;
-
 constructor TProgressBar.init(const max : longint; const title:string);
 var x,y : word;
 begin
@@ -31,7 +33,9 @@ begin
  maxCount_ := max;
  line      := Hi(WindMax)+1;
  title_    := title;
+ start_    := now;
  update_   := max div 100;
+ if update_ > 100 then update_ := 100;
  x := WhereX;
  y := WhereY;
 
@@ -65,7 +69,15 @@ end;
 procedure TProgressBar.draw;
 var oldWinMin, oldWinMax, x, y : word;
     i,j                        : longint;
+    time,left                  : TClock;
+    h,m,s                      : word;
 begin
+ time := now - start_;
+ if progress_ > 0 then
+  left := (time / progress_ ) * maxCount_
+ else
+  left := 0.0;
+ toHMS(h,m,s,left);
  lastUpdate_ := progress_;
 
  oldWinMin := WindMin;
@@ -99,7 +111,9 @@ begin
  textColor(green);
 
  i:= (progress_*100) div maxCount_;
- write(' ',i,'%');
+ write(' ',i,'% ');
+ textColor(lightGray);
+ write('Remain: ',h:2,':',m:2,':',s:2);
  clrEol;
 
  window(Lo(oldWinMin)+1, Hi(oldWinMin)+1,

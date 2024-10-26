@@ -4,7 +4,7 @@ interface
 type TClock = comp; (* The only availble 64bit data type*)
 
 function now : TClock; (*Return a unix timestamp*)
-
+procedure toHMS(var h,m,s : word; time: TClock);
 implementation
 
 uses dos;
@@ -42,6 +42,22 @@ begin
  getDate(year, month, day, tmp);
  getTime(hour, minutes, seconds, tmp);
  now := universalToEpoch(year, month, day, hour, minutes, seconds);
+end;
+
+procedure toHMS(var h,m,s : word; time: TClock);
+var tmp : TClock;
+begin
+  tmp := int(time / 60) * 60;
+  s := trunc(time - tmp);
+  time := time / 60;
+
+  tmp := int(time / 60) * 60;
+  m := trunc(time - tmp);
+  time := time / 60;
+
+  tmp := int(time / 60) * 60;
+  h := trunc(time);
+
 end;
 
 begin
