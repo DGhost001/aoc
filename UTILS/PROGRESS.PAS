@@ -74,7 +74,7 @@ var oldWinMin, oldWinMax, x, y : word;
 begin
  time := now - start_;
  if progress_ > 0 then
-  left := (time / progress_ ) * maxCount_
+  left := (time / progress_ ) * maxCount_ - time
  else
   left := 0.0;
  toHMS(h,m,s,left);

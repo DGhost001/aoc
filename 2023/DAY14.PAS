@@ -1,7 +1,7 @@
 program day14;
 uses ProgressBar,crt;
 const MaxDim = 128;
-      InputFile = 'INP\DAY14_TE.TXT';
+      InputFile = 'INP\DAY14_IN.TXT';
 type TRocks = (None, Round, Square);
      TMap   = record
         map        : array[0..MaxDim -1, 0..MaxDim-1] of TRocks;
@@ -74,7 +74,7 @@ begin
         (* Check for round Rocks *)
         if map[line, column] = Round then begin
           drop := column + 1;
-          while (drop > 0) and (map[line,drop] = None) do inc(drop);
+          while (drop < xdim - 1 ) and (map[line,drop] = None) do inc(drop);
           if map[line, drop] <> None then dec(drop);
           map[line, column] := None;
           map[line, drop] := Round;
@@ -125,6 +125,23 @@ begin
   end;
 end;
 
+procedure printPlatform(const platform : TMap);
+var row, col : byte;
+begin
+  writeln;
+  with platform do begin
+     for row := 0 to ydim - 1 do begin
+       for col := 0 to xdim - 1 do case map[row,col] of
+          None  : begin textColor(darkGray); write('.'); end;
+          Square: begin textColor(lightGray); write('#'); end;
+          Round : begin textColor(White); write('O'); end;
+       end;
+       writeln;
+     end;
+  end;
+  textColor(lightGray);
+end;
+
 var platform : TMap;
 
 function part1(var input: Text) : longint;
@@ -135,7 +152,14 @@ begin
 end;
 
 function part2(var input: Text) : longint;
-const Cycles = $3b9aca00;
+(*
+  This constant needs a bit of explanation, but there is a nice prove
+  of it over at the redit. It just gives the rigth answer. Prime numbers
+  rock!
+  This saves us from doing the cycle detection, as 1k loops compute
+  in a reasonable time spawn.
+*)
+const Cycles = 1000(* $3b9aca00*);
 var   i  : longint;
       p  : TProgressBar;
 begin
@@ -147,6 +171,7 @@ begin
     RockAndRollWest (platform);
     RockAndRollSouth(platform);
     RockAndRollEast (platform);
+
     if keypressed then break;
   end;
   p.done;
@@ -157,6 +182,7 @@ var input : Text;
     p1    : longint;
     p2    : longint;
 begin
+  clrscr;
   assign(input, InputFile);
   reset(input);
   p1 := part1(input);
