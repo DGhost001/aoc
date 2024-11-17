@@ -1,7 +1,7 @@
 unit Heap;
 interface
-uses Itemhandler;
-const MaxHeapItems = 1024;
+uses Itemhandler,crt;
+const MaxHeapItems = 1024*15;
 type  PMinHeap = ^TMinHeap;
       TMinHeap = object
        private
@@ -69,12 +69,13 @@ begin
   (* We take the last element and trickle it down the tree *)
 
   while i1 < last_ do begin
+    if keypressed then runError(300);
     i2 := i1 * 2 + 1;  (* Left Node *)
     i3 := i1 * 2 + 2;  (* Right Node *)
 
-    if heap_[i2] <> NIL then begin (* If there is no left, there is no right *)
+    if (i2 < MaxHeapItems) and (heap_[i2] <> NIL) then begin (* If there is no left, there is no right *)
        (* Find the smaller child *)
-       if heap_[i3] <> NIL then begin
+       if (i3 < MaxHeapItems) and (heap_[i3] <> NIL) then begin
           if heap_[i2]^.compare(heap_[i3]) = Smaller then
             i4 := i2
           else

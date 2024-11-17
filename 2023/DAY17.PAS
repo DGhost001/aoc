@@ -13,7 +13,7 @@ This is the solution for day 17
 
 *)
 program Day17;
-uses heap, ItemHandler;
+uses crt,heap, ItemHandler;
 const InputFile = 'INP/DAY17_IN.TXT';
 type TDirection = (Up,Left,Right, Down);
      TOccupancy = set of TDirection;
@@ -22,8 +22,8 @@ type TDirection = (Up,Left,Right, Down);
      end;
      TMap = record
         xdim, ydim : byte;
-        weight     : array[1..128, 1..128] of byte;
-        occupancy  : array[1..128, 1..128] of TOccupancy;
+        weight     : array[1..141, 1..141] of byte;
+        occupancy  : array[1..141, 1..141] of TOccupancy;
      end;
      PStep = ^TStep;
      TStep = object(ItemType)
@@ -62,7 +62,12 @@ begin
    end;
  advancePos := result;
 end;
-
+function isEligableDirection(const src, dst : TDirection): boolean;
+begin
+  isEligableDirection :=
+    ((src in [Up, Down]) and (dst in [Left, Right])) or
+    ((src in [Left, Right]) and (dst in [Up, Down]));
+end;
 
 function findShortestPath(var map: TMap;
                           const minStep, maxStep :byte): longint;
@@ -83,6 +88,8 @@ begin
 
   while prio^.size > 0 do begin
     step := PStep(prio^.pop);
+    write(#$0d);
+    write(step^.weight_,' ',prio^.size,'  ');
     if (step^.pos_.x = goal.x) and
        (step^.pos_.y = goal.y)
      then begin
@@ -90,19 +97,21 @@ begin
       dispose(step,done);
       break;
     end;
-
     if not (step^.direction_ in map.occupancy[step^.pos_.x, step^.pos_.y]) then begin
       map.occupancy[step^.pos_.x, step^.pos_.y] :=
         map.occupancy[step^.pos_.x, step^.pos_.y] + [step^.direction_];
       for direction := Up to Down do begin
         pos    := step^.pos_;
         weight := step^.weight_;
-        if direction <> step^.direction_ then
+        if isEligableDirection(step^.direction_, direction) then
           for i := 1 to maxStep do begin
             if advancePos(pos, map.xdim, map.ydim, direction) then begin
               inc(weight, map.weight[pos.x, pos.y]);
-              if i >= minStep then
+              if (i >= minStep) and
+                 (not(direction in map.occupancy[pos.x, pos.y]))
+              then begin
                 prio^.push(new(PStep, init(pos, weight, direction)));
+              end;
             end else break;
         end;
       end;
