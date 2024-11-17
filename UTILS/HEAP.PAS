@@ -16,6 +16,7 @@ type  PMinHeap = ^TMinHeap;
 
          procedure push(item : PItemType);
          function pop : PItemType;
+         function size: word;
      end;
 implementation
 
@@ -33,6 +34,11 @@ begin
  if last_ > 0 then
    for i:=0 to last_ - 1 do
      SYSTEM.dispose(heap_[i], done);
+end;
+
+function TMinHeap.size : word;
+begin
+  size := last_;
 end;
 
 procedure TMinHeap.push(item: PItemType);
