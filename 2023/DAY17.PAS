@@ -28,7 +28,7 @@ type TDirection = (Up,Left,Right, Down);
      PStep = ^TStep;
      TStep = object(ItemType)
        pos_       : TPos;
-       weight_     : longint;
+       weight_    : word;
        direction_ : TDirection;
        constructor init(const pos       : TPos;
                         const weight    : longint;
@@ -169,13 +169,23 @@ begin
   part1 := findShortestPath(map,1,3);
 end;
 
+function part2(var input : Text) : longint;
+begin
+  reset(input);
+  loadMap(input, map);
+  part2 := findShortestPath(map,4,10);
+end;
+
 var input : Text;
     p1    : longint;
+    p2    : longint;
 begin
   assign(input, InputFile);
-  p1 := part1(input);
+  p1 := part1(input); writeln;
+  p2 := part2(input); writeln;
 
   close(input);
 
   writeln('Part 1 Answer is: ',p1);
+  writeln('Part 2 Answer is: ',p2);
 end.
