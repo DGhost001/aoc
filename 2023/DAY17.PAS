@@ -1,4 +1,4 @@
-(*
+ (*
 This is the solution for day 17
 ================================
 
@@ -11,6 +11,8 @@ This is the solution for day 17
 
   For the map data structure, we can reuse a lot from day16.
 
+  P.S. The program requires a lot of memory for the second solution ...
+       so compile for protected mode for now ...
 *)
 program Day17;
 uses crt,heap, ItemHandler;
@@ -79,17 +81,22 @@ var   prio      : PMinHeap;
       direction : TDirection;
       pos       : TPos;
       weight    : longint;
+      last      : longint;
 begin
   prio := new(PMinHeap, init);
   prio^.push(new(PStep,init(start,0,Right)));
   prio^.push(new(PStep,init(start,0,Down)));
   goal.x := map.xdim;
   goal.y := map.ydim;
+  last := 0;
 
   while prio^.size > 0 do begin
     step := PStep(prio^.pop);
-    write(#$0d);
-    write(step^.weight_,' ',prio^.size,'  ');
+    if last <> step^.weight_ then begin
+      write(#$0d);
+      write(step^.weight_,' ',prio^.size,'  ');
+      last := step^.weight_ ;
+    end;
     if (step^.pos_.x = goal.x) and
        (step^.pos_.y = goal.y)
      then begin
