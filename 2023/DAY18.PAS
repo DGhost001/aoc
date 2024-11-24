@@ -8,13 +8,13 @@ uses crt, graph, dequeue, Itemhandler, sort, progressbar;
 *)
 type
      TPos   = record
-       x : integer;
-       y : integer;
+       x : longint;
+       y : longint;
      end;
 
      TPoint = record
-       x : real;
-       y : real;
+       x : double;
+       y : double;
      end;
 
      PPolyPoint = ^TPolyPoint;
@@ -200,6 +200,63 @@ begin
   parseInput := result;
 end;
 
+function parseInput2(var input:Text;
+                     var totalSteps : comp;
+                     var minY,maxY  : longint
+                    ):PDeQueue;
+  function hexToInt(s: string):longint;
+  var result : longint;
+      i      : word;
+  begin
+    result := 0;
+    for i:=1 to length(s) do begin
+      result := result shl 4;
+      case s[i] of
+        '0'..'9': result := result + (ord(s[i]) - ord('0'));
+        'a'..'f': result := result + (ord(s[i]) - ord('a')) + 10;
+      else runError(300);
+      end;
+    end;
+    hexToInt:=result;
+  end;
+
+var result : PDeQueue;
+    dir    : char;
+    steps  : longint;
+    color  : string;
+    pos    : TPos;
+begin
+  reset(input);
+  totalSteps := 0;
+  minY       := 0;
+  maxY       := 0;
+  pos.x      := 0;
+  pos.y      := 10521646;
+  result := new(PDequeue, init);
+  result^.pushBack(new(PPolyPoint,init(pos)));
+  while not eof(input) do begin
+    readln(input, dir, steps, color);
+    dir := color[length(color)-1];
+    delete(color,1,3);
+    delete(color,length(color)-1,2);
+
+    steps := hexToInt(color);
+    case dir of
+      '0': inc(pos.x, steps);
+      '2': dec(pos.x, steps);
+      '1': inc(pos.y, steps);
+      '3': dec(pos.y, steps);
+    else
+     RunError(300); (* Invalid input *)
+    end;
+    totalSteps:=totalSteps + steps;
+    if pos.y < minY then minY := pos.y;
+    if pos.y > maxY then maxY := pos.y;
+    result^.pushBack(new(PPolyPoint, init(pos)));
+  end;
+  parseInput2 := result;
+end;
+
 function part1(var input : Text) : longint;
 var minY, maxY : integer;
     poly       : PDequeue;
@@ -239,8 +296,50 @@ begin
   part1 := area;
 end;
 
+function part2(var input : Text) : comp;
+var minY, maxY : longint;
+    poly       : PDequeue;
+    intersect  : PDequeue;
+    area       : comp;
+    line       : longint;
+    it1,it2    : PDeQueueIterator;
+    tmp        : double;
+    p          : TProgressBar;
+begin
+  poly:=parseInput2(input, area, minY, maxY);
+  (* drawPoly(poly,minY);
+  setColor(red); *)
+  writeln('Dim: ',minY,'-',maxY);
+
+  p.init(maxY - minY + 1, 'Measure...');
+  for line := minY to maxY do begin
+    intersect := getIntersections(poly,line);
+    cleanOutBorder(poly,intersect);
+    it1 := intersect^.first;
+    if it1 <> NIL then it2 := it1^.next else it2 := NIL;
+    while it2 <> NIL do begin
+      tmp := PPolyPoint(it2^.at)^.pos_.x - PPolyPoint(it1^.at)^.pos_.x - 1;
+      (* writeln(line-minY,':',tmp:1:0);*)
+      if tmp > 0 then begin
+(*      graph.line(trunc(PPolyPoint(it1^.at)^.pos_.x+1) - 300, trunc(PPolyPoint(it1^.at)^.pos_.y)-minY,
+             trunc(PPolyPoint(it2^.at)^.pos_.x-1) - 300, trunc(PPolyPoint(it2^.at)^.pos_.y)-minY);
+*)     area:=area + trunc(tmp);
+      end;
+      it1 := it2^.next;
+      if it1 <> NIL then it2 := it1^.next else it2 := NIL;
+    end;
+    intersect^.dispose;
+    p.step(1);
+  end;
+  p.done;
+  poly^.dispose;
+  part2 := area;
+end;
+
+
 var input : Text;
     p1    : longint;
+    p2    : comp;
     a,b   : integer;
 begin
   clrscr;
@@ -249,11 +348,13 @@ begin
   (* initGraph(a,b,'c:\bp\bgi'); *)
 
   assign(input, InputFile);
-  p1 := part1(input);
+  (* p1 := part1(input); *)
+  p2 := part2(input);
   close(input);
 
  (* readln;
   closeGraph; *)
 
   writeln('Part 1 Answer is: ',p1);
+  writeln('Part 2 Answer is: ',p2:1:0);
 end.
