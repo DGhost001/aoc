@@ -108,7 +108,7 @@ var a,b,c,d : uint64_t;
 begin
   clrscr;
   fromLongInt64(1234567890,a);
-  fromLongInt64(654321,b);
+  fromLongInt64(2,b);
 
   divmnu(c,d,a,b);
 
