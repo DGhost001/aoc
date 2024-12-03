@@ -30,12 +30,41 @@ begin
   end;
 end;
 
-  procedure quickSort(var a: array of integer);
+procedure quickSort(var a: array of integer);
     procedure qSort(low, high : integer);
     var left, right : integer;
         tmp, pivot  : integer;
     begin
       if (high - low) >= 1 then begin (* Make sure we have something to sort *)
+        left := low;
+        right:= high;
+        pivot:= a[ (left + right) div 2];
+        while left < right do begin
+          while a[left] < pivot do inc(left);
+          while a[right] > pivot do dec(right);
+
+          if left <= right then begin
+            tmp := a[left];
+            a[left] := a[right];
+            a[right] := tmp;
+            inc(left);
+            dec(right);
+          end;
+        end;
+        qSort(low, right);
+        qSort(left, high);
+      end;
+    end;
+  begin
+    qSort(Low(a), High(a));
+  end;
+
+procedure quickSortLong(var a: array of longint);
+    procedure qSort(low, high : word);
+    var left, right : integer;
+        tmp, pivot  : longint;
+    begin
+      if (high > low) then begin (* Make sure we have something to sort *)
         left := low;
         right:= high;
         pivot:= a[ (left + right) div 2];
