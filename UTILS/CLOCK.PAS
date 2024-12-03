@@ -7,7 +7,7 @@ function now : TClock; (*Return a unix timestamp*)
 procedure toHMS(var h,m,s : word; time: TClock);
 implementation
 
-uses dos;
+uses dos, stdint;
 
 function gregorianToJulian(year, month, day : longint): longint;
 const D0 : longint =    1461;
@@ -45,19 +45,15 @@ begin
 end;
 
 procedure toHMS(var h,m,s : word; time: TClock);
-var tmp : TClock;
+const Sixty : Uint64_t = ($3c,0,0,0,0,0,0,0);
+var tmp, remain : Uint64_t;
 begin
-  tmp := int(time / 60) * 60;
-  s := trunc(time - tmp);
-  time := time / 60;
-
-  tmp := int(time / 60) * 60;
-  m := trunc(time - tmp);
-  time := time / 60;
-
-  tmp := int(time / 60) * 60;
-  h := trunc(time);
-
+  uint64FromComp(time, tmp);
+  div64(tmp, Sixty, remain);
+  s := remain[0];
+  div64(tmp, Sixty, remain);
+  m := remain[0];
+  h := toLongInt64(tmp) and $ffff;
 end;
 
 begin
