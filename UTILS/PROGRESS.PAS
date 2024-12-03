@@ -5,12 +5,13 @@ interface
 uses clock;
 type PProgressBar = ^TProgressBar;
      TProgressBar = object
-       line       : byte;    (* Window coordinates *)
-       maxCount_  : longint; (* Maximum *)
-       progress_  : longint;
-       update_    : longint;
-       lastUpdate_: longint;
-       start_     : TClock;
+       line            : byte;    (* Window coordinates *)
+       maxCount_       : longint; (* Maximum *)
+       progress_       : longint;
+       update_         : longint;
+       lastUpdate_     : longint;
+       start_          : TClock;
+       lastUpdateTime_ : TClock;
 
        title_     : string;
 
@@ -34,8 +35,9 @@ begin
  line      := Hi(WindMax)+1;
  title_    := title;
  start_    := now;
- update_   := max div 100;
- if update_ > 100 then update_ := 100;
+ lastUpdateTime_ := 0;
+ update_   := max div 10000;
+ if update_ < 10 then update_ := 10;
  x := WhereX;
  y := WhereY;
 
@@ -69,57 +71,59 @@ end;
 procedure TProgressBar.draw;
 var oldWinMin, oldWinMax, x, y : word;
     i,j                        : longint;
-    time,left                  : TClock;
-    h,m,s                      : word;
+    time,left,tmp              : TClock;
+    h,eh,m,em,s,es             : word;
+    pr                         : real;
 begin
- time := now - start_;
- if progress_ > 0 then
-  left := (time / progress_ ) * maxCount_ - time
- else
-  left := 0.0;
- toHMS(h,m,s,left);
- lastUpdate_ := progress_;
+   time := now - start_;
+   if progress_ > 0 then
+    left := (time / progress_ ) * maxCount_ - time
+   else
+    left := 0.0;
+   toHMS(h,m,s,left);
+   toHMS(eh,em,es,time);
+   lastUpdate_ := progress_;
 
- oldWinMin := WindMin;
- oldWinMax := WindMax;
- x := WhereX;
- y := WhereY;
+   oldWinMin := WindMin;
+   oldWinMax := WindMax;
+   x := WhereX;
+   y := WhereY;
 
- window(1,line,80,line);
-
-
- i:= (progress_*40) div maxCount_;
-
- textBackground(0);
- textColor(lightGray);
-
- write(title_,' ');
+   window(1,line,80,line);
 
 
- textColor(Magenta);
- write(#$c3);
+   i:= (progress_*40) div maxCount_;
 
- if i<>40 then textColor(lightMagenta) else textColor(green);
+   textBackground(0);
+   textColor(lightGray);
 
- for j:=1 to 40 do begin
-   if j <= i then write(#$c4) else write(' ');
- end;
+   write(title_,' ');
 
- textColor(Magenta);
- if i = 40 then write(#$b4) else write(#$b3);
 
- textColor(green);
+   textColor(Magenta);
+   write(#$c3);
 
- i:= (progress_*100) div maxCount_;
- write(' ',i,'% ');
- textColor(lightGray);
- write('Remain: ',h:2,':',m:2,':',s:2);
- clrEol;
+   if i<>40 then textColor(lightMagenta) else textColor(green);
 
- window(Lo(oldWinMin)+1, Hi(oldWinMin)+1,
-        Lo(oldWinMax)+1, Hi(oldWinMax)+1);
- gotoxy(x,y);
- textColor(lightGray);
+   for j:=1 to 40 do begin
+     if j <= i then write(#$c4) else write(' ');
+   end;
+
+   textColor(Magenta);
+   if i = 40 then write(#$b4) else write(#$b3);
+
+   textColor(green);
+
+   pr := progress_*100  / maxCount_;
+   write(' ',pr:2:2,'% ');
+   textColor(lightGray);
+   write(eh:2,':',em:2,':',es:2,' ',h:2,':',m:2,':',s:2);
+   clrEol;
+
+   window(Lo(oldWinMin)+1, Hi(oldWinMin)+1,
+          Lo(oldWinMax)+1, Hi(oldWinMax)+1);
+   gotoxy(x,y);
+   textColor(lightGray);
 end;
 
 procedure TProgressBar.step;
