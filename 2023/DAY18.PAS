@@ -7,160 +7,156 @@ uses crt, graph, dequeue, Itemhandler, sort, progressbar;
    We just need to build the poloygon differntly
 *)
 type
-     TPos   = record
+     TPoint = record
        x : longint;
        y : longint;
      end;
 
-     TPoint = record
-       x : double;
-       y : double;
+     TIntersections =  record
+        cut     : array[0..31] of longint;
+        numCuts : byte;
      end;
 
-     PPolyPoint = ^TPolyPoint;
-     TPolyPoint = object(ItemType)
-       pos_ : TPoint;
-
-       constructor init(const pos   : TPos);
-       constructor init2(const p     : TPoint);
-       constructor copy(const other : PPolyPoint);
+     PEdge = ^TEdge;
+     TEdgeType = (Horrizontal, Vertical);
+     TEdge = object(ItemType)
+       start_ : TPoint;
+       end_   : TPoint;
+       type_  : TEdgeType;
+       constructor init(const p1, p2   : TPoint);
+       constructor copy(const other : PEdge);
        function compare(other:PItemType):TRelation;virtual;
      end;
 
-const NullPos : TPos = (x : 255; y : 255);
-      InputFile = 'INP\DAY18_IN.TXT';
-
-constructor TPolyPoint.init(const pos : TPos);
+const InputFile = 'INP\DAY18_IN.TXT';
+      XOffset = 300;
+      YOffset = 200;
+constructor TEdge.init(const p1, p2 : TPoint);
 begin
-  pos_.x := pos.x;
-  pos_.y := pos.y+0.5;
+  (* The edge definition is, that the start point is always above / left
+     of the endpoint. This constructor makes sure this always holds at least
+     for horizontal / vertical edges
+   *)
+  if p1.y = p2.y then begin
+    if p1.x <= p2.x then begin
+       start_ := p1;
+       end_   := p2;
+    end else begin
+       start_ := p2;
+       end_   := p1;
+    end;
+  end else if p1.y < p2.y then begin
+    start_ := p1;
+    end_   := p2;
+  end else begin
+    start_ := p2;
+    end_   := p1;
+  end;
+  if start_.y = end_.y then type_ := Horrizontal else
+  if start_.x = end_.x then type_ := Vertical
+  else runError(300); (* Only H and V Edges are allowed *)
 end;
 
-constructor TPolyPoint.init2(const p : TPoint);
+constructor TEdge.copy(const other : PEdge);
 begin
-  pos_:=p;
+  start_ := other^.start_;
+  end_   := other^.end_;
 end;
 
-constructor TPolyPoint.copy(const other : PPolyPoint);
+function TEdge.compare(other:PItemType):TRelation;
+var otherEdge : PEdge;
 begin
-  pos_ := other^.pos_;
-end;
+  otherEdge := PEdge(other);
 
-function TPolyPoint.compare(other:PItemType):TRelation;
-var otherPoint : PPolyPoint;
-begin
-  otherPoint := PPolyPoint(other);
-
-  if otherPoint^.pos_.x > self.pos_.x then compare:=Smaller else
-  if otherPoint^.pos_.x < self.pos_.x then compare:=Bigger else
+  if otherEdge^.start_.y > self.start_.y then compare:= Smaller else
+  if otherEdge^.start_.y < self.start_.y then compare:= Bigger else
+  if otherEdge^.end_.y > self.end_.y then compare:= Smaller else
+  if otherEdge^.end_.y > self.end_.y then compare:= Bigger else
+  if otherEdge^.start_.x > self.start_.x then compare := Smaller else
+  if otherEdge^.start_.x < self.start_.x then compare := Bigger else
+  if otherEdge^.end_.x > self.end_.x then compare := Smaller else
+  if otherEdge^.end_.x < self.end_.x then compare := Bigger else
   compare := Equal;
 end;
 
-function getIntersections(polygon : PDeQueue; line : integer):PDeQueue;
-var it, itn    : PDeQueueIterator;
-    result     : PDeQueue;
-    p1, p2     : TPoint;
-    pos        : TPos;
+procedure getIntersections(const line : longint;
+                           var its, ite: PDeQueueIterator;
+                           var result  : TIntersections
+                         );
+
+(* Swap two cut entries *)
+procedure swapCut(const i1, i2 : byte; var result: TIntersections);
+var tmp : longint;
 begin
-  result := new(PDequeue,init);
-
-  it  := polygon^.first;
-  itn := it^.next;
-
-  while itn <> NIL do begin
-    p1 := PPolyPoint(it^.at)^.pos_;
-    p2 := PPolyPoint(itn^.at)^.pos_;
-
-    if (trunc(p1.x) = trunc(p2.x)) and  (* We can have only vertical intersections *)
-       (((p1.y <= line) and (p2.y >= line)) or
-       ((p1.y >= line) and  (p2.y <= line))) then begin
-       pos.x := trunc(p1.x);
-       pos.y := line;
-       result^.pushBack(new(PPolyPoint, init(pos)));
-    end;
-    it := itn;
-    itn := itn^.next;
-  end;
-
-  (* we can't guarantee that the polygon is clock or anti clockwise *)
-  (* But we know that the left border is not part of the polygon    *)
-  (* So by sorting we bring the intersections in a sensible order   *)
-  sortQueue(result);
-
-  getIntersections := result;
+  tmp := result.cut[i1];
+  result.cut[i1] := result.cut[i2];
+  result.cut[i2] := tmp;
 end;
 
-(* The main issue with the intersection function above is that if
-   we have horrizontals lines it will create intersections for the
-   corners.
-   This means we would count the area twice.
-   This function filters out the parts that are covered by a
-   horrizontal polygon line.
-*)
-procedure cleanOutBorder(polygon     : PDequeue;
-                         intersection: PDequeue);
-var it1,it2, pt1, pt2 : PDequeueIterator;
-    ip1, ip2          : TPoint;
-    pp1, pp2, tmp     : TPoint;
+(* Simple insertion sort *)
+procedure addCut(const pos: longint; var result: TIntersections);
+var i : byte;
 begin
-  it1 := intersection^.first;
-  while it1 <> NIL do begin
-    it2 := it1^.next;
-    if it2 = NIL then break;
-    ip1 := PPolyPoint(it1^.at)^.pos_;
-    ip2 := PPolyPoint(it2^.at)^.pos_;
-    pt1 := polygon^.first;
-    while pt1 <> NIL do begin
-     pt2 := pt1^.next;
-     if pt2 = NIL then break;
-     pp1 := PPolyPoint(pt1^.at)^.pos_;
-     pp2 := PPolyPoint(pt2^.at)^.pos_;
-     (*Make sure the line is always from left to right *)
-     if pp1.x > pp2.x then begin
-       tmp:= pp1;
-       pp1:= pp2;
-       pp2:= tmp;
-     end;
+  with result do begin
+    if numCuts > HIGH(cut) then runError(300);
+    cut[numCuts] := pos;
+    inc(numCuts);
 
-     if (trunc(pp1.y) = trunc(pp2.y)) and
-        (trunc(ip1.y) = trunc(pp1.y)) then begin
-        if (ip1.x >= pp1.x) and (ip1.x <= pp2.x) then begin
-          ip1.x := pp2.x;
-        end;
-        if (ip2.x >= pp1.x) and (ip2.x <= pp2.x) then begin
-          ip2.x := pp1.x;
-        end;
-        (* We need to split the line *)
-        if (ip1.x <= pp1.x) and (ip2.x >= pp2.x) then begin
-          intersection^.pushBack(new(PPolyPoint,init2(pp2)));
-          intersection^.pushBack(new(PPolyPoint,init2(ip2)));
-          ip2.x := pp1.x;
-        end;
-     end;
-     pt1 := pt2^.next;
+    i:= numCuts - 1;
+    while i > 0 do begin
+      if cut[i - 1] > cut[i] then swapCut(i-1, i, result)
+      else break;
+      dec(i);
     end;
-    PPolyPoint(it1^.at)^.pos_:= ip1;
-    PPolyPoint(it2^.at)^.pos_:= ip2;
-    it1:= it2^.next;
   end;
 end;
 
-procedure drawPoly(poly:PDeQueue; const minY : integer);
-var it1, it2 : PDeQueueIterator;
-    ip1, ip2 : TPoint;
+var it : PDeQueueIterator;
+     i : byte;
+     hline : boolean;
 begin
-  it1 := poly^.first;
-  setColor(green);
-  while it1 <> NIL do begin
-    it2 := it1^.next;
-    if it2 = NIL then break;
-    ip1 := PPolyPoint(it1^.at)^.pos_;
-    ip2 := PPolyPoint(it2^.at)^.pos_;
 
-    line(trunc(ip1.x-300),trunc(ip1.y)-minY,
-         trunc(ip2.x-300),trunc(ip2.y)-minY);
+  if ite = NIL then ite := its;
 
-    it1 := it2;
+  while (ite <> NIL) and
+        (PEdge(ite^.at)^.start_.y <= line)  do ite := ite^.next;
+
+  while (its <> NIL) and
+        (PEdge(its^.at)^.end_.y <= line) do its := its^.next;
+
+  it := its;
+
+  result.numCuts := 0;
+  hline := false;
+  (* First process the vertical cuts *)
+  while it <> ite do begin
+    with PEdge(it^.at)^ do begin
+      if (type_ = Vertical) and
+         (start_.y <= line ) and
+         (line < end_.y) then
+        addCut(start_.x, result);
+      hline := hline or ((type_ = Horrizontal) and (start_.y = line));
+    end;
+    it := it^.next;
+  end;
+  if hline then i := 0 else i:= result.numCuts;
+  (* Second step, take out all horrizontal lines *)
+  while i < result.numCuts do begin
+   it := its;
+   while it <> ite do begin
+     with PEdge(it^.at)^ do begin
+       if (type_ = Horrizontal) and
+          (start_.y = line) and
+          (result.cut[i] <= start_.x) and
+          (start_.x < result.cut[i+1]) then begin
+           addCut(start_.x,result);
+           addCut(end_.x,result);
+       end;
+     end;
+     it := it^.next;
+   end;
+
+   inc(i,2);
   end;
 end;
 
@@ -172,30 +168,30 @@ var result : PDeQueue;
     dir    : char;
     steps  : word;
     color  : string;
-    pos    : TPos;
+    p1, p2 : TPoint;
 begin
   reset(input);
   totalSteps := 0;
-  minY       := 512;
-  maxY       := 512;
-  pos.x      := 512;
-  pos.y      := 512;
+  minY       := 0;
+  maxY       := 0;
+  p1.x       := 0;
+  p1.y       := 0;
   result := new(PDequeue, init);
-  result^.pushBack(new(PPolyPoint,init(pos)));
   while not eof(input) do begin
+    p2 := p1;
     readln(input, dir, steps, color);
     case dir of
-      'R': inc(pos.x, steps);
-      'L': dec(pos.x, steps);
-      'D': inc(pos.y, steps);
-      'U': dec(pos.y, steps);
+      'R': inc(p1.x, steps);
+      'L': dec(p1.x, steps);
+      'D': inc(p1.y, steps);
+      'U': dec(p1.y, steps);
     else
      RunError(300); (* Invalid input *)
     end;
     inc(totalSteps,steps);
-    if pos.y < minY then minY := pos.y;
-    if pos.y > maxY then maxY := pos.y;
-    result^.pushBack(new(PPolyPoint, init(pos)));
+    if p1.y < minY then minY := p1.y;
+    if p1.y > maxY then maxY := p1.y;
+    result^.pushBack(new(PEdge, init(p2,p1)));
   end;
   parseInput := result;
 end;
@@ -224,17 +220,17 @@ var result : PDeQueue;
     dir    : char;
     steps  : longint;
     color  : string;
-    pos    : TPos;
+    p1,p2  : TPoint;
 begin
   reset(input);
   totalSteps := 0;
   minY       := 0;
   maxY       := 0;
-  pos.x      := 0;
-  pos.y      := 10521646;
+  p1.x       := 0;
+  p1.y       := 0;
   result := new(PDequeue, init);
-  result^.pushBack(new(PPolyPoint,init(pos)));
   while not eof(input) do begin
+    p2 := p1;
     readln(input, dir, steps, color);
     dir := color[length(color)-1];
     delete(color,1,3);
@@ -242,119 +238,105 @@ begin
 
     steps := hexToInt(color);
     case dir of
-      '0': inc(pos.x, steps);
-      '2': dec(pos.x, steps);
-      '1': inc(pos.y, steps);
-      '3': dec(pos.y, steps);
+      '0': inc(p1.x, steps);
+      '2': dec(p1.x, steps);
+      '1': inc(p1.y, steps);
+      '3': dec(p1.y, steps);
     else
      RunError(300); (* Invalid input *)
     end;
     totalSteps:=totalSteps + steps;
-    if pos.y < minY then minY := pos.y;
-    if pos.y > maxY then maxY := pos.y;
-    result^.pushBack(new(PPolyPoint, init(pos)));
+    if p1.y < minY then minY := p1.y;
+    if p1.y > maxY then maxY := p1.y;
+    result^.pushBack(new(PEdge, init(p2,p1)));
   end;
   parseInput2 := result;
 end;
 
-function part1(var input : Text) : longint;
-var minY, maxY : integer;
-    poly       : PDequeue;
-    intersect  : PDequeue;
-    area       : longint;
-    line       : integer;
-    it1,it2    : PDeQueueIterator;
-    tmp        : real;
+procedure drawPoly(poly:PDequeue);
+var it: PDeQueueIterator;
+begin
+  setColor(green);
+  it := poly^.first;
+  while it <> NIL do begin
+    with PEdge(it^.at)^ do begin
+      line(start_.x+XOffset, start_.y+YOffset, end_.x+XOffset, end_.y+YOffset);
+    end;
+    it := it^.next;
+  end;
+end;
+
+function computeArea(const minY, maxY : longint;
+                     poly : PDeQueue) : comp;
+var intersect  : TIntersections;
+    area       : comp;
+    line       : longint;
+    i          : byte;
+    its,ite    : PDeQueueIterator;
+    tmp        : longint;
     p          : TProgressBar;
 begin
-  poly:=parseInput(input, area, minY, maxY);
-  (* drawPoly(poly,minY);
-  setColor(red);
-  writeln('Dim: ',minY,'-',maxY);*)
+
+  its := poly^.first;
+  ite := NIL;
+  area := 0;
   p.init(maxY - minY + 1, 'Measure...');
+
   for line := minY to maxY do begin
-    intersect := getIntersections(poly,line);
-    cleanOutBorder(poly,intersect);
-    it1 := intersect^.first;
-    if it1 <> NIL then it2 := it1^.next else it2 := NIL;
-    while it2 <> NIL do begin
-      tmp := PPolyPoint(it2^.at)^.pos_.x - PPolyPoint(it1^.at)^.pos_.x - 1;
-      (* writeln(line-minY,':',tmp:1:0);*)
+    getIntersections(line,its,ite, intersect);
+    i:= 0;
+    while i < intersect.numCuts do begin
+      tmp := intersect.cut[i+1] - intersect.cut[i]-1;
+
       if tmp > 0 then begin
-(*      graph.line(trunc(PPolyPoint(it1^.at)^.pos_.x+1) - 300, trunc(PPolyPoint(it1^.at)^.pos_.y)-minY,
-             trunc(PPolyPoint(it2^.at)^.pos_.x-1) - 300, trunc(PPolyPoint(it2^.at)^.pos_.y)-minY);
-*)     inc(area, trunc(tmp));
+       area := area + tmp;
       end;
-      it1 := it2^.next;
-      if it1 <> NIL then it2 := it1^.next else it2 := NIL;
+      inc(i,2);
     end;
-    intersect^.dispose;
     p.step(1);
   end;
   p.done;
+  computeArea := area;
+end;
+
+
+function part1(var input : Text) : longint;
+var minY, maxY : integer;
+    poly       : PDequeue;
+    area       : longint;
+    p          : TProgressBar;
+begin
+  poly:=parseInput(input, area, minY, maxY);
+  writeln('Sorting Edges...');
+  sortQueue(poly);
+  part1 := trunc(computeArea(minY, maxY,poly)) + area;
   poly^.dispose;
-  part1 := area;
 end;
 
 function part2(var input : Text) : comp;
 var minY, maxY : longint;
     poly       : PDequeue;
-    intersect  : PDequeue;
     area       : comp;
-    line       : longint;
-    it1,it2    : PDeQueueIterator;
-    tmp        : double;
     p          : TProgressBar;
 begin
   poly:=parseInput2(input, area, minY, maxY);
-  (* drawPoly(poly,minY);
-  setColor(red); *)
-  writeln('Dim: ',minY,'-',maxY);
-
-  p.init(maxY - minY + 1, 'Measure...');
-  for line := minY to maxY do begin
-    intersect := getIntersections(poly,line);
-    cleanOutBorder(poly,intersect);
-    it1 := intersect^.first;
-    if it1 <> NIL then it2 := it1^.next else it2 := NIL;
-    while it2 <> NIL do begin
-      tmp := PPolyPoint(it2^.at)^.pos_.x - PPolyPoint(it1^.at)^.pos_.x - 1;
-      (* writeln(line-minY,':',tmp:1:0);*)
-      if tmp > 0 then begin
-(*      graph.line(trunc(PPolyPoint(it1^.at)^.pos_.x+1) - 300, trunc(PPolyPoint(it1^.at)^.pos_.y)-minY,
-             trunc(PPolyPoint(it2^.at)^.pos_.x-1) - 300, trunc(PPolyPoint(it2^.at)^.pos_.y)-minY);
-*)     area:=area + trunc(tmp);
-      end;
-      it1 := it2^.next;
-      if it1 <> NIL then it2 := it1^.next else it2 := NIL;
-    end;
-    intersect^.dispose;
-    p.step(1);
-  end;
-  p.done;
+  writeln('Sorting Edges...');
+  sortQueue(poly);
+  part2 := computeArea(minY, maxY,poly) + area;
   poly^.dispose;
-  part2 := area;
 end;
 
 
 var input : Text;
     p1    : longint;
     p2    : comp;
-    a,b   : integer;
 begin
   clrscr;
-  a:=0;
-  b:=0;
-  (* initGraph(a,b,'c:\bp\bgi'); *)
-
   assign(input, InputFile);
-  (* p1 := part1(input); *)
+  p1 := part1(input);
+  writeln('Part 1 Answer is: ',p1);
+
   p2 := part2(input);
   close(input);
-
- (* readln;
-  closeGraph; *)
-
-  writeln('Part 1 Answer is: ',p1);
   writeln('Part 2 Answer is: ',p2:1:0);
 end.
