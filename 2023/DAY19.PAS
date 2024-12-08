@@ -1,6 +1,6 @@
 program day19;
 (* This is the implementation of the aoc 23 day 19 *)
-uses crt, ItemHandler;
+uses crt, ItemHandler, DeQueue, Progressbar;
 const InputFileName = 'INP\DAY19_IN.TXT';
 type
       TCategories = (Extreme, Musical, Aerodynamic, Shiny);
@@ -133,6 +133,19 @@ begin
   getNextStep := next_;
 end;
 
+procedure runFilter(const rating:  TRating);
+var cstep : PStep;
+    i     : word;
+begin
+  for i:=0 to HIGH(rules) do
+    if rules[i].id = 'in' then begin
+      cstep := rules[i].steps[0];
+      break;
+    end;
+  while cstep <> NIL do
+    cstep:= cstep^.getNextStep(rating);
+end;
+
 procedure parseRules(var input: Text);
 
 function stackPos(const s:string): byte;
@@ -237,13 +250,63 @@ begin
   end;
 end;
 
+function parseParts(var input: Text) : PDeQueue;
+var result : PDeQueue;
+    p      : byte;
+    line   : string;
+    tmp    : string;
+    rating : TRating;
+    value  : word;
+    c      : integer;
+begin
+  result := new(PDeQueue, init);
+  while not(eof(input)) do begin
+    readln(input, line);
+    if line <> '' then begin
+      (* Remove the curly braces, no one needs them *)
+      delete(line,1,1);
+      delete(line,length(line),1);
+
+      fillchar(rating,sizeof(rating),0);
+      while length(line) > 0 do begin
+        p := pos(',', line);
+        if p = 0 then p := length(line) + 1;
+        tmp := copy(line,1,p-1);
+        delete(line,1, p);
+        val(copy(tmp,3,length(tmp) - 2), value, c);
+        case tmp[1] of
+          'x': rating[Extreme] := value;
+          's': rating[Shiny] := value;
+          'm': rating[Musical] := value;
+          'a': rating[Aerodynamic] := value;
+        end;
+      end;
+      result^.pushBack(new(PPart,init(rating)));
+    end;
+  end;
+  parseParts := result;
+end;
+
 function part1(var input: Text): longint;
+var parts : PDeQueue;
+    it    : PDeQueueIterator;
+    p     : TProgressBar;
 begin
   reject.init;
   accept.init;
   fillchar(rules,sizeof(rules),0);
   parseRules(input);
+  parts := parseParts(input);
+  p.init(parts^.size,'Filter..');
+  it := parts^.first;
 
+  while it <> NIL do begin
+    runFilter(PPart(it^.at)^.rating_);
+    it := it^.next;
+    p.step(1);
+  end;
+  p.done;
+  parts^.dispose;
   cleanUpRules;
   part1 := accept.total_;
 end;
