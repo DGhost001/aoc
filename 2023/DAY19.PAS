@@ -5,6 +5,10 @@ const InputFileName = 'INP\DAY19_IN.TXT';
 type
       TCategories = (Extreme, Musical, Aerodynamic, Shiny);
       TRating  = array[Extreme .. Shiny] of word;
+      TRange  = record
+         lower, upper : word;
+      end;
+      TFilter = array[Extreme .. Shiny] of TRange;
 
       PPart = ^TPart;
       TPart = object(ItemType)
@@ -311,11 +315,85 @@ begin
   part1 := accept.total_;
 end;
 
+function filterRange(step : PStep; const filter : TFilter) : comp;
+const rating   : TRating = (0,0,0,0);
+var   yes, no  : TFilter;
+      tmp, tmp2: comp;
+begin
+  while step <> NIL do begin
+    if step = @accept then begin
+      tmp :=       (filter[Extreme].upper - filter[Extreme].lower + 1);
+      tmp := tmp * (filter[Shiny].upper - filter[Shiny].lower + 1);
+      tmp := tmp * (filter[Musical].upper - filter[Musical].lower + 1);
+      tmp := tmp * (filter[Aerodynamic].upper - filter[Aerodynamic].lower + 1);
+      filterRange := tmp;
+      break;
+    end else if step = @reject then begin
+      filterRange := 0;
+      break;
+    end else if typeOf(step^) = typeOf(TForward) then
+      step := step^.getNextStep(rating)
+    else with PConditional(step)^ do begin
+       yes := filter;
+       no  := filter;
+
+       if rel_ = Bigger then begin
+         if val_ > yes[cat_].lower then yes[cat_].lower := val_ + 1;
+         if val_ < no[cat_].upper then no[cat_].upper := val_;
+       end else if rel_ = Smaller then begin
+         if val_ < yes[cat_].upper then yes[cat_].upper := val_ - 1;
+         if val_ > no[cat_].lower then no[cat_].lower := val_;
+       end else runError(300);
+       tmp := 0;
+       tmp2:= 0;
+       if (yes[cat_].lower < yes[cat_].upper) then
+         tmp  := filterRange(yes_, yes);
+       if (no[cat_].lower < no[cat_].upper) then
+         tmp2 := filterRange(no_, no);
+
+       filterRange := tmp + tmp2;
+       break;
+    end;
+  end;
+end;
+
+function part2(var input: Text) : comp;
+var filter : TFilter;
+    step   : PStep;
+    i      : word;
+begin
+  accept.init;
+  reject.init;
+
+  fillchar(rules,sizeof(rules),0);
+  parseRules(input);
+
+  filter[Extreme].lower     := 1; filter[Extreme].upper     := 4000;
+  filter[Shiny].lower       := 1; filter[Shiny].upper       := 4000;
+  filter[Musical].lower     := 1; filter[Musical].upper     := 4000;
+  filter[Aerodynamic].lower := 1; filter[Aerodynamic].upper := 4000;
+
+  for i:=0 to HIGH(rules) do
+    if rules[i].id = 'in' then begin
+      step := rules[i].steps[0];
+      break;
+    end;
+
+  part2 := filterRange(step, filter);
+
+  cleanUpRules;
+end;
+
 var input: Text;
       p1 : longint;
+      p2 : comp;
 begin
   assign(input,InputFileName);
   reset(input);
   p1 := part1(input);
-  writeln('The Answert to Part 1 is: ',p1);
+  writeln('The Answer to Part 1 is: ',p1);
+  reset(input);
+  p2 := part2(input);
+  writeln('The Answer to Part 2 is: ',p2:1:0);
+  close(input);
 end.
