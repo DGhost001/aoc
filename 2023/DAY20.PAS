@@ -1,6 +1,7 @@
 program day20;
 uses DeQueue, ItemHandler;
 (* This is the solution for day 20 of aoc 2023 *)
+const InputFileName = 'INP\DAY20_IN.TXT';
 type TSignal = (LowSignal, HighSignal);
 
      PEvents  = ^TEvents;
@@ -57,7 +58,8 @@ type TSignal = (LowSignal, HighSignal);
         procedure trigger(const src: word; const signal: TSignal; outSignals: PDeQueue); virtual;
       end;
 
-var modules : TModuleList;
+var numberOfModules: byte;
+    modules        : TModuleList;
 
 constructor TEvents.init(const src, dst: word; const signal : TSignal);
 begin
@@ -174,16 +176,80 @@ function computeId(const s: string) : word;
 var sum : word;
       i : integer;
 begin
-  if s = 'broadcaster' then sum := $ffff;
+  sum := 0;
+  if s = 'broadcaster' then sum := $ffff
   else for i := 1 to length(s) do
     sum := (sum * 26 + (ord(s[i]) - ord('a'))) and $ffff;
 
   computeId := sum;
 end;
-
+(* %bd -> lg, cm *)
 procedure parseInputs(var input: Text);
+  function createModule(const module: string) : byte;
+  begin
+    if numberOfModules > HIGH(modules) then runError(300);
+    case module[1] of
+         '%': modules[numberOfModules] :=
+                 new(PFlipFlop, init(computeId(copy(module, 2, length(module) - 1))));
+         '&': modules[numberOfModules] :=
+                 new(PNand, init(computeId(copy(module, 2, length(module) - 1))));
+         'b': modules[numberOfModules] :=
+                 new(PBroadcast, init($ffff));
+    else
+        modules[numberOfModules] := new(PModule, init(computeId(module)));
+    end;
+    createModule := numberOfModules;
+    inc(numberOfModules);
+  end;
+
+  procedure addOutputs(outputs: string; const module: byte);
+  var p : byte;
+  begin
+    while length(outputs) > 0 do begin
+      p := pos(',', outputs);
+      if p = 0 then p := length(outputs) + 1;
+      modules[module]^.addOutPut(computeId(copy(outputs,1, p - 1)));
+      delete(outputs, 1, p + 1);
+    end;
+  end;
+
+var line            : string;
+    module, outputs : string;
+    p               : byte;
 begin
+  while not eof(input) do begin
+    readln(input, line);
+    p := pos('->', line);
+    if p <> 0 then begin
+      module  := copy(line, 1, p - 2);
+      outputs := copy(line, p+3, length(line) - (p + 3));
+      p:= createModule(module);
+      addOutputs(outputs, p);
+    end;
+  end;
 end;
 
+procedure cleanup;
+var i : integer;
 begin
+  for i:= 0 to numberOfModules - 1 do
+    dispose(modules[i]);
+end;
+procedure connectAllModules;
+var i : integer;
+begin
+  for i:=0 to numberOfModules - 1 do
+    modules[i]^.connect(modules);
+end;
+
+
+var input: Text;
+begin
+  fillChar(modules, sizeof(modules), 0);
+  assign(input, InputFileName);
+  reset(input);
+  parseInputs(input);
+  connectAllModules;
+
+  cleanup;
 end.
