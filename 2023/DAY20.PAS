@@ -94,6 +94,10 @@ procedure TModule.connect(const modules: TModuleList);
 var i,j : integer;
 begin
   for i := 0 to numberOfOutputs_ - 1 do begin
+    if outputs_[i].id_ = 465 (* rx *) then
+      outputs_[i].ref_ := $fffe
+    else
+      outputs_[i].ref_ := $ffff;
     for j := 0 to HIGH(modules) do begin
       if (modules[j] <> NIL) and (modules[j]^.id_ = outputs_[i].id_) then begin
         outputs_[i].ref_ := j;
@@ -294,29 +298,40 @@ begin
               inc( highSignals);
            end;
       end;
-      modules[dst_]^.trigger(src_, signal_, list);
+
+      if dst_ < numberOfModules then
+        modules[dst_]^.trigger(src_, signal_, list)
     end;
     list^.popFront;
   end;
   list^.dispose;
 end;
 
-function loopLength(var low, high : longint) : longint;
-var count : longint;
-    l, h: longint;
+function propagate2: longint;
+var list     : PDeQueue;
+    start    : integer;
+    count    : longint;
 begin
-  if not allDefault then runError(300); (* All Modules should be in default state *)
+  start := 0;
   count := 0;
-  low   := 0;
-  high  := 0;
-  repeat
-    propagate(l, h);
-    low := low + l;
-    high:= high + h;
-    inc(count);
-  until allDefault;
-  loopLength := count;
+  while modules[start]^.id_ <> $ffff do inc(start);
+  list  := new(PDeQueue,init);
+  list^.pushBack(new(PEvents,init(start,start,LowSignal)));
+  while list^.size > 0 do begin
+    with PEvents(list^.front)^ do begin
+      if dst_  = $fffe then begin
+        if signal_ = LowSignal then inc(count);
+        if signal_ = HighSignal then inc(count,2);
+      end;
+      if dst_ < numberOfModules then
+        modules[dst_]^.trigger(src_, signal_, list)
+    end;
+    list^.popFront;
+  end;
+  list^.dispose;
+  propagate2 := count;
 end;
+
 
 function part1 : longint;
 var count     : word;
@@ -339,36 +354,28 @@ begin
   p.done;
   part1 := low * high;
 end;
-(*
-function part1 : longint;
-const times  = 1000;
-var loopLow, loopHigh, low, high, l,h : longint;
-    loop                   : longint;
-    left                   : longint;
-    factor                 : longint;
+
+function part2 : longint;
+var count     : longint;
+    l         : longint;
 begin
-  loop := loopLength(low, high);
-
-  left  := times mod loop;
-  factor:= times div loop;
-  low   := low * factor;
-  high  := high * factor;
-
-  while left > 0 do begin
-   propagate(l,h);
-   dec(left);
-   low  := low + l;
-   high := high + h;
-  end;
-
-  part1 := low * high;
+  if not allDefault then runError(300); (* All Modules should be in default state *)
+  count := 0;
+  repeat
+    l := propagate2;
+    inc(count);
+    if count mod 500 = 0 then
+      write(#$0d,count,' ',l,'  ');
+  until l = 1;
+  part2 := count;
 end;
-*)
 
-var input: Text;
-    p1   : longint;
+
+var input  : Text;
+    p1, p2 : longint;
 begin
   clrscr;
+  writeln(computeId('rx'));
   fillChar(modules, sizeof(modules), 0);
   assign(input, InputFileName);
   reset(input);
@@ -376,8 +383,16 @@ begin
   connectAllModules;
 
   p1 := part1;
-
   writeln('Answer to part1 is:',p1);
-
   cleanup;
+
+  numberOfModules := 0;
+  fillChar(modules, sizeof(modules), 0);
+  reset(input);
+  parseInputs(input);
+  connectAllModules;
+
+  p2 := part2;
+  writeln('Answer to part2 is:', p2);
+
 end.
