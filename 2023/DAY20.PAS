@@ -1,8 +1,10 @@
 program day20;
-uses DeQueue, ItemHandler, Progressbar, crt;
+uses DeQueue, ItemHandler, Progressbar, crt, stdint;
 (* This is the solution for day 20 of aoc 2023 *)
 const InputFileName = 'INP\DAY20_IN.TXT';
-type TSignal = (LowSignal, HighSignal);
+type TCounter = (C1, C2, C3, C4);
+     TCounters = array[C1 .. C4] of word;
+     TSignal = (LowSignal, HighSignal);
 
      PEvents  = ^TEvents;
      TEvents = object(ItemType)
@@ -307,29 +309,30 @@ begin
   list^.dispose;
 end;
 
-function propagate2: longint;
+procedure propagate2(const count     : word;
+                     const counterIds : TCounters;
+                     var   counters  : TCounters);
 var list     : PDeQueue;
     start    : integer;
-    count    : longint;
+    counter  : TCounter;
+
 begin
   start := 0;
-  count := 0;
   while modules[start]^.id_ <> $ffff do inc(start);
   list  := new(PDeQueue,init);
   list^.pushBack(new(PEvents,init(start,start,LowSignal)));
   while list^.size > 0 do begin
     with PEvents(list^.front)^ do begin
-      if dst_  = $fffe then begin
-        if signal_ = LowSignal then inc(count);
-        if signal_ = HighSignal then inc(count,2);
-      end;
+      if signal_ = LowSignal then
+        for counter := C1 to C4 do
+          if (counters[counter] = 0) and (src_ = counterIds[counter]) then
+            counters[counter] := count;
       if dst_ < numberOfModules then
         modules[dst_]^.trigger(src_, signal_, list)
     end;
     list^.popFront;
   end;
   list^.dispose;
-  propagate2 := count;
 end;
 
 
@@ -355,24 +358,75 @@ begin
   part1 := low * high;
 end;
 
-function part2 : longint;
-var count     : longint;
-    l         : longint;
+(*
+  Part 2 is the kind of solution I personly dislike. There is no general
+  solution to the problem that would compute in somewhat resonable time.
+
+  So we have to cheese it. The Graph of this day consists of 4 counters
+  that all for feed into the rx node to generate the solution.
+
+  We find the counter length of all four counters and than compute when
+  they would fire all at the same time, which would lead to the low
+  pulse on the requested rx node.
+*)
+function part2 : comp;
+const ids      : TCounters = (319, 675, 64, 263); (* Those are solution specific. See below *)
+var count      : word;
+    l          : longint;
+    counts     : TCounters;
+    p          : TProgressBar;
+    result, tmp: Uint64_t;
+    i          : TCounter;
 begin
   if not allDefault then runError(300); (* All Modules should be in default state *)
   count := 0;
-  repeat
-    l := propagate2;
-    inc(count);
-    if count mod 500 = 0 then
-      write(#$0d,count,' ',l,'  ');
-  until l = 1;
-  part2 := count;
+  fillChar(counts, sizeof(counts), 0);
+
+  p.init(4096,'count...');
+
+  for count:=1 to 4096 do begin
+    propagate2(count, ids, counts);
+    p.step(1);
+  end;
+
+  p.done;
+
+  fromLongInt64(counts[C1], result);
+  for i:=C2 to C4 do begin
+    fromLongInt64(counts[i], tmp);
+    mul64(result, tmp);
+  end;
+
+
+  part2 := uint64ToComp(result);
 end;
 
+(* This generates a mermaid graph, needed to find the solution for part 2*)
+procedure mermaid(var output: Text);
+var i,j: integer;
+begin
+  writeln(output,'flowchart TB');
+  writeln(output,' n465(((rx)))');
+  for i:= 0 to numberOfModules -1 do begin
+    write(output,' n',modules[i]^.id_);
+    if typeof(modules[i]^) = typeof(TNand) then
+      writeln(output,'[ !& - ',modules[i]^.id_,']')
+    else if typeof(modules[i]^) = typeof(TFlipFlop) then
+      writeln(output,'[[ FF - ',modules[i]^.id_,']]')
+    else if typeof(modules[i]^) = typeof(TBroadcast) then
+      writeln(output,'(( BC ))')
+  end;
+  writeln(output,'');
+
+  for i:= 0 to numberOfModules -1 do with modules[i]^ do begin
+    for j:= 0 to numberOfOutputs_ - 1 do
+      writeln(output,' n',id_,' --> n',outputs_[j].id_);
+  end;
+end;
 
 var input  : Text;
-    p1, p2 : longint;
+    p1     : longint;
+    p2     : comp;
 begin
   clrscr;
   writeln(computeId('rx'));
@@ -384,6 +438,19 @@ begin
 
   p1 := part1;
   writeln('Answer to part1 is:',p1);
+  close(input);
+
+{$IFDEF EXPORT_GRAPH}
+  (*
+     Enable this part to generate the mermaid graph
+     for extracting the parameters for part 2
+  *)
+  assign(input,'graph.txt');
+  rewrite(input);
+  mermaid(input);
+  close(input);
+{$ENDIF}
+
   cleanup;
 
   numberOfModules := 0;
@@ -393,6 +460,6 @@ begin
   connectAllModules;
 
   p2 := part2;
-  writeln('Answer to part2 is:', p2);
+  writeln('Answer to part2 is:', p2:1:0);
 
 end.
