@@ -111,7 +111,7 @@ begin
   pos  := new(PDeQueue,init);
   pos^.pushBack(new(PBacklog,init(start)));
   p.init(64,'Step...');
-  for c:=0 to 64 do begin
+  for c:=0 to 63 do begin
       oneStepForElves(pos, map);
       p.step(1);
   end;
