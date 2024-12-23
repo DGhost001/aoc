@@ -1,6 +1,11 @@
 program day21;
 (* This is the implementation for day 21 of advent of code 2023 *)
-uses crt, cassert, dequeue, progressbar, itemhandler;
+uses crt,
+     cassert,
+     dequeue,
+     progressbar,
+     itemhandler,
+     heap;
 
 const InputFileName= 'INP\DAY21_IN.TXT';
       MaxX = 130;
@@ -15,11 +20,15 @@ type  TDirection = (North, South, West, East);
       PBacklog = ^TBacklog;
       TBacklog = object(ItemType)
         pos_ : TPos;
-        constructor init(const pos : TPos);
+        dist_: word;
+        constructor init(const pos : TPos; const dist: word);
+        function compare(other:PItemType):TRelation; virtual;
       end;
 
       TOccupancy = set of 0..MaxX;
       TMap = array [0..MaxY] of TOccupancy;
+      PDistanceMap = ^TDistanceMap;
+      TDistanceMap = array[0..MaxX,0..MaxY] of word;
 
 function adjustPosition(var pos: TPos;
                         const direction: TDirection): boolean;
@@ -35,9 +44,54 @@ begin
   adjustPosition := result;
 end;
 
-constructor TBacklog.init(const pos: TPos);
+procedure buildDistanceMap(const map  : TMap;
+                           const start: TPos;
+                           var   dmap : TDistanceMap);
+var heap : TMinHeap;
+      bl : PBacklog;
+      tmp: TPos;
+        d: TDirection;
+        p: TProgressbar;
 begin
-  pos_ := pos;
+  fillchar(dmap,sizeof(dmap),0);
+  heap.init;
+  heap.push(new(PBacklog,init(start,0)));
+  p.init(MaxX*MaxY,'crunch');
+  while heap.size > 0 do begin
+    bl := PBacklog(heap.pop);
+    with bl^ do begin
+      if dmap[pos_.x_,pos_.y_] = 0 then begin
+        p.step(1);
+        dmap[pos_.x_, pos_.y_] := dist_;
+        for d:= North to East do begin
+            tmp := pos_;
+            if adjustPosition(tmp,d) then begin
+               if (not (tmp.x_ in map[tmp.y_])) and
+                  (dmap[tmp.x_, tmp.y_] = 0) then
+                    heap.push(new(PBacklog,init(tmp,dist_+1)));
+            end;
+        end;
+      end;
+    end;
+    dispose(bl,done);
+  end;
+  p.done;
+  heap.done;
+end;
+
+constructor TBacklog.init(const pos: TPos; const dist: word);
+begin
+  pos_  := pos;
+  dist_ := dist;
+end;
+
+function TBacklog.compare(other:PItemType):TRelation;
+begin
+  with PBacklog(other)^ do begin
+     if dist_ > self.dist_ then compare := Smaller else
+     if dist_ < self.dist_ then compare := Bigger
+     else compare := Equal;
+  end;
 end;
 
 procedure loadMap(var input: Text;
@@ -66,58 +120,24 @@ begin
   end;
 end;
 
-procedure oneStepForElves(var positions: PDequeue;
-                          const map      : TMap);
-var newPositions : PDequeue;
-           pods  : TMap;
-           tmp   : TPos;
-           it    : PDeQueueIterator;
-           d     : TDirection;
-           p     : TProgressBar;
-begin
-
-  fillchar(pods,sizeof(pods),0);
-  newPositions := new(PDequeue, init);
-  it := positions^.first;
-  p.init(positions^.size,'comp...');
-  while it <> NIL do begin
-    for d:= North to East do begin
-      tmp := PBacklog(it^.at)^.pos_;
-      if adjustPosition(tmp,d) then begin
-        if (not (tmp.x_ in pods[tmp.y_])) and
-           (not (tmp.x_ in map[tmp.y_])) then begin
-             pods[tmp.y_] := pods[tmp.y_] + [tmp.x_];
-             newPositions^.pushBack(new(PBacklog,init(tmp)));
-           end;
-      end;
-    end;
-    p.step(1);
-    it := it^.next;
-  end;
-  p.done;
-  positions^.dispose;
-  positions := newPositions;
-
-end;
-
 function part1(var input: Text) : longint;
-var map : TMap;
-   start: TPos;
-     pos: PDeQueue;
-       p: TProgressBar;
-       c: word;
+var map  : TMap;
+    dmap : PDistancemap;
+    start: TPos;
+    c,x,y: word;
 begin
   loadMap(input, map, start);
-  pos  := new(PDeQueue,init);
-  pos^.pushBack(new(PBacklog,init(start)));
-  p.init(64,'Step...');
-  for c:=0 to 63 do begin
-      oneStepForElves(pos, map);
-      p.step(1);
-  end;
-  p.done;
-  part1 := pos^.size;
-  pos^.dispose;
+  dmap := new(PDistancemap);
+  writeln('Build distance map...');
+  buildDistanceMap(map, start, dmap^);
+
+  c:=0;
+  for x:=0 to MaxX do
+   for y:=0 to MaxY do
+     if (dmap^[x,y] > 0) and (dmap^[x,y] <=64) and
+        (dmap^[x,y] mod 2 = 0) then inc(c);
+  dispose(dmap);
+  part1 := c;
 end;
 
 var input : Text;
