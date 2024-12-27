@@ -36,8 +36,18 @@ begin
  title_    := title;
  start_    := now;
  lastUpdateTime_ := 0;
- update_   := max div 10000;
- if update_ < 10 then update_ := 10;
+
+ if max > 100000 then
+    update_   := max div 10000
+ else if max > 10000 then
+    update_   := max div 1000
+ else if max > 1000 then
+    update_   := max div 100
+ else if max > 100 then
+    update_   := max div 10
+ else
+    update_  := 1;
+
  x := WhereX;
  y := WhereY;
 
@@ -131,7 +141,7 @@ begin
  inc(progress_,progress);
 
  if progress_ > maxCount_ then progress := maxCount_;
- if (progress_ - lastUpdate_ > update_) or
+ if (progress_ - lastUpdate_ >= update_) or
     (progress_ = maxCount_)
  then
   draw;
@@ -143,7 +153,7 @@ begin
  if progress_ < 0 then progress_ := 0;
 
  if progress_ > maxCount_ then progress := maxCount_;
- if (progress_ - lastUpdate_ > update_) or
+ if (progress_ - lastUpdate_ >= update_) or
     (progress_ = maxCount_)
  then
   draw;
