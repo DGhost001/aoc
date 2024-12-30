@@ -11,6 +11,7 @@ function countLines(var input : Text): longint;
 
 function getParity(const a: longint) : TParity;
 function isParity(const a: longint; const p: TParity):boolean;
+function reverseParity(const a: TParity) : TParity;
 
 implementation
 
@@ -46,6 +47,14 @@ end;
 function isParity(const a: longint; const p: TParity): boolean;
 begin
   isParity := getParity(a) = p;
+end;
+
+function reverseParity(const a : TParity): TParity;
+begin
+  if a = Odd then
+    reverseParity := Even
+  else
+    reverseParity := Odd;
 end;
 
 begin
