@@ -19,12 +19,18 @@ interface
     procedure xor32(var a,b: Uint32_t);
 
     procedure add64(var a,b: Uint64_t);                   (* a:= a + b *)
+    procedure add64LongInt(var a: Uint64_t; const b: longint);
+
     procedure add32(var a,b: Uint32_t);
 
     procedure sub64(var a,b: Uint64_t);                   (* a:= a - b *)
+    procedure sub64LongInt(var a : Uint64_t; const b : longint);
+
     procedure sub32(var a,b: Uint32_t);
 
     procedure mul64(var a,b: Uint64_t);                   (* a:= a * b *)
+    procedure mul64LongInt(var a: Uint64_t; const b: longint);
+
     procedure div64(var a, b, r : Uint64_t);              (* a:= a div b, r:= a mod b *)
 
     function isNull64(var a: Uint64_t): boolean;          (* a == 0 *)
@@ -959,6 +965,27 @@ function uint64ToComp(var b: Uint64_t) : comp;
 type PComp = ^Comp;
 begin
   uint64ToComp := PComp(@b)^;
+end;
+
+procedure add64LongInt(var a: Uint64_t; const b: longint);
+var t : Uint64_t;
+begin
+  fromLongInt64(b,t);
+  add64(a,t);
+end;
+
+procedure sub64LongInt(var a : Uint64_t; const b : longint);
+var t: Uint64_t;
+begin
+  fromLongInt64(b,t);
+  sub64(a,t);
+end;
+
+procedure mul64LongInt(var a: Uint64_t; const b: longint);
+var t: Uint64_t;
+begin
+  fromLongInt64(b,t);
+  mul64(a,t);
 end;
 
 begin
