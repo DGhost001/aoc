@@ -12,6 +12,8 @@ interface
           one64 : Uint64_t = ($01,$00,$00,$00,$00,$00,$00,$00);
 
 
+    procedure shiftLeft64(count: byte; var a: Uint64_t);
+
     procedure rotateLeft64(count: byte; var a: Uint64_t); (* a:= a rol c *)
     procedure rotateLeft32(count: byte; var a: Uint32_t);
 
@@ -63,6 +65,21 @@ interface
 implementation
 
 {$IFNDEF FPC}
+procedure shiftLeft64; assembler;
+asm
+  les di, [a]
+  xor cx, cx
+  mov cl, count
+  @1:
+     clc
+     rcl WORD [es: di + 0],1
+     rcl WORD [es: di + 2],1
+     rcl WORD [es: di + 4],1
+     rcl WORD [es: di + 6],1
+  loop @1
+end;
+
+
 procedure rotateLeft64; assembler;
 asm
     (*Setup the pointer to the array*)

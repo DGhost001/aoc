@@ -254,21 +254,30 @@ var map  : TMap;
     getPosForTileIndex := 3;
   end;
 
-  const totalSteps      : longint =  26501365;
+  const totalSteps      : longint =  196(* 26501365 *);
   var   tileY           : longint;
         endY            : longint;
         startX          : longint;
         offset, tileSize: longint;
         numTilesX       : longint;
         remainSteps     : longint;
+        remainYSteps    : longint;
         result,line,tmp, tmp2 : Uint64_t;
         initalParity    : TParity;
         parity          : TParity;
+        parityX         : TParity;
         pos             : byte;
         foo             : word;
+        p               : TProgressBar;
+        cache           : record
+           pos          : byte;
+           remain       : longint;
+           count        : array[Odd..Even] of word;
+        end;
   begin
   generateDMaps;
   result  := zero64;
+  cache.remain := -1;
 
   (* Here goes some assumptions about the layout of the input.
 
@@ -280,11 +289,13 @@ var map  : TMap;
      The issue is that the sample data provided does not have this property
      which makes debugging a pain in the ass.
    *)
-  offset  := dmaps[0].dmap^[positions[0].x_, positions[0].y_];
+  offset  := dmaps[0].dmap^[positions[8].x_, positions[8].y_] + 1; (*+1 because the start was 0 here *)
   tileSize:= dmaps[4].dmap^[positions[8].x_, positions[8].y_];
 
   endY := computeMissingTileIndex(0,totalSteps, offset, tileSize);
   initalParity := getParity(totalSteps);
+
+  p.init(endY+1,'calc...');
 
   for tileY := 0 to endY do begin
 
@@ -295,54 +306,78 @@ var map  : TMap;
 
     line   := Zero64;
     startX := computeMissingTileIndex(tileY, totalSteps, offset, tileSize);
-    numTilesX := startX;
+    numTilesX := startX + 1;
     remainSteps := totalSteps -
                      computeSteps(startX, offset, tileSize) -
                      computeSteps(tileY, offset, tileSize);
+    remainYSteps:= totalSteps -
+                     computeSteps(tileY, offset, tileSize);
+
+    if getParity(startX) = Odd then
+      parityX := reverseParity(parity)
+    else
+      parityX := parity;
+
     (* +------ End  Tile    *)
     (* | +---- Even Tile    *)
     (* | |+--- Odd Tile     *)
     (* V VV    VCenter Tile *)
     (* |#+#+#+#-#+#+#+#|    *)
     if numTilesX >= 1 then begin
+       pos := getPosForTileIndex(0, tileY);
        dec(numTilesX);
-       add64LongInt(line, dmaps[getPosForTileIndex(0,tileY)].count[parity]);
+       if ( remainYSteps > dmaps[pos].max ) then
+         add64LongInt(line, dmaps[pos].count[parity])
+       else
+         add64LongInt(line, countPods(dmaps[pos].dmap^, remainYSteps, getParity(remainSteps), foo))
     end;
 
-    if numTilesX >= 2 then
-      with dmaps[getPosForTileIndex(startX, tileY)] do begin
+    if numTilesX >= 1 then
+      pos := getPosForTileIndex(startX, tileY);
+      with dmaps[pos] do begin
+        if (cache.remain <> remainSteps) or (cache.pos <> pos) then begin
+          cache.pos    := pos;
+          cache.remain := remainSteps;
+          cache.count[Odd] := countPods(dmap^, remainSteps, Odd, foo);
+          cache.count[Even]:= countPods(dmap^, remainSteps, Even, foo);
+        end;
+
         (* First we have two ends *)
-        add64LongInt(line, 2*countPods(dmaps[pos].dmap^,
-                           remainSteps,
-                           parity,
-                           foo));
+        add64LongInt(line, 2*cache.count[parityX]);
+
+        (* The end cap handled above, now the parts on the line *)
         fromLongInt64(count[parity],tmp);
-        mul64LongInt(tmp, startX  div 2);
+        mul64LongInt(tmp, (startX - 1)  div 2);
         fromLongInt64(count[reverseParity(parity)], tmp2);
-        mul64LongInt(tmp2, (startX + 1) div 2);
+        mul64LongInt(tmp2, (startX - 1 + 1) div 2);
         add64(tmp, tmp2);
-        mul64LongInt(tmp2,2);
+        shiftLeft64(1,tmp2);
         add64(line, tmp);
     end;
 
     if tileY <> 0 then
-      mul64LongInt(line,2); (*Mirror to bottom halfe*)
+      shiftLeft64(1,line); (*Mirror to bottom halfe*)
 
     add64(result, line); (* Add the line to the result *)
+    p.step(1);
   end;
+  p.done;
 
   part2 := uint64ToComp(result);
 end;
 
 var input : Text;
        p1 : longint;
+       p2 : comp;
 begin
   clrscr;
   assign(input, InputFileName);
   reset(input);
-  part2(input);
-  (*p1 := part1(input);
+  (*
+  p1 := part1(input);
   writeln('Answert part1 is: ', p1);
   *)
+  p2 := part2(input);
+  writeln('Answer to Part2 is: ',p2:1:0);
   close(input);
 end.
