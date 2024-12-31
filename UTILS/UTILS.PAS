@@ -41,7 +41,7 @@ end;
 
 function getParity(const a: longint) : TParity;
 begin
-  if (a mod 2) = 0 then getParity := Even else getParity:= Odd;
+  if (abs(a) mod 2) = 0 then getParity := Even else getParity:= Odd;
 end;
 
 function isParity(const a: longint; const p: TParity): boolean;

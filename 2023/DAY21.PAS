@@ -38,10 +38,10 @@ var result : boolean;
 begin
   result := true;
   case direction of
-     North: if pos.x_  > 0    then dec(pos.x_) else result := false;
-     South: if pos.x_  < MaxX then inc(pos.x_) else result := false;
-     West : if pos.y_  > 0    then dec(pos.y_) else result := false;
-     East : if pos.y_  < MaxY then inc(pos.y_) else result := false;
+     West  : if pos.x_  > 0    then dec(pos.x_) else result := false;
+     East  : if pos.x_  < MaxX then inc(pos.x_) else result := false;
+     North : if pos.y_  > 0    then dec(pos.y_) else result := false;
+     South : if pos.y_  < MaxY then inc(pos.y_) else result := false;
   end;
   adjustPosition := result;
 end;
@@ -53,8 +53,8 @@ function computeSteps(const tileIndex : longint;
                       const     offset: word;
                       const   tileSize: word) : longint;
 begin
-  if tileIndex >= 1 then
-    computeSteps := offset + (tileIndex - 1)*tileSize
+  if abs(tileIndex) >= 1 then
+    computeSteps := offset + (abs(tileIndex) - 1)*tileSize
   else
     computeSteps := 0;
 end;
@@ -90,21 +90,21 @@ var heap : TMinHeap;
         d: TDirection;
         p: TProgressbar;
 begin
-  fillchar(dmap,sizeof(dmap),0);
+  fillchar(dmap,sizeof(dmap),$ff);
   heap.init;
   heap.push(new(PBacklog,init(start,initalStep)));
   p.init(MaxX*MaxY,'crunch');
   while heap.size > 0 do begin
     bl := PBacklog(heap.pop);
     with bl^ do begin
-      if dmap[pos_.x_,pos_.y_] = 0 then begin
+      if dmap[pos_.x_,pos_.y_] = $ffff then begin
         p.step(1);
         dmap[pos_.x_, pos_.y_] := dist_;
         for d:= North to East do begin
             tmp := pos_;
             if adjustPosition(tmp,d) then begin
                if (not (tmp.x_ in map[tmp.y_])) and
-                  (dmap[tmp.x_, tmp.y_] = 0) then
+                  (dmap[tmp.x_, tmp.y_] = $ffff) then
                     heap.push(new(PBacklog,init(tmp,dist_+1)));
             end;
         end;
@@ -127,10 +127,11 @@ begin
   maxSteps := dmap[0,0];
   for x:=0 to MaxX do
     for y:=0 to MaxY do begin
-      if (dmap[x,y] > 0) and
+      if (dmap[x,y] < $ffff) and
          (dmap[x,y] <= threshold) and
          (isParity(dmap[x,y], parity)) then inc(result);
-      if maxSteps < dmap[x,y] then maxSteps := dmap[x,y];
+      if  (dmap[x,y] <> $ffff) and
+          (maxSteps < dmap[x,y]) then maxSteps := dmap[x,y];
     end;
   countPods := result;
 end;
@@ -232,10 +233,10 @@ var map  : TMap;
     for i:=0 to 8 do with dmaps[i] do begin
       dmap := new(PDistancemap);
       if build then begin
-        if i = 0 then
+        (* if i = 0 then *)
           buildDistanceMap(map, positions[i], 0, dmap^)
-        else
-          buildDistanceMap(map, positions[i], 1, dmap^);
+        (* else
+          buildDistanceMap(map, positions[i], 1, dmap^);*)
       end else read(cache, dmap^);
       count[Odd]  := countPods(dmap^,65535,Odd, max);
       count[Even] := countPods(dmap^,65535,Even, max);
@@ -249,12 +250,22 @@ var map  : TMap;
 
   function getPosForTileIndex(tileX, tileY: longint): byte;
   begin
-    if (tileX = 0) and (tileY = 0) then getPosForTileIndex := 0 else
-    if (tileX = 0) then getPosForTileIndex := 4 else
-    getPosForTileIndex := 3;
+    if tileY = 0 then begin
+      if tileX = 0 then getPosForTileIndex := 0 else
+      if tileX > 0 then getPosForTileIndex := 2
+      else getPosForTileIndex := 6;
+    end else if tileY > 0 then begin
+      if tileX = 0 then getPosForTileIndex := 8 else
+      if tileX > 0 then getPosForTileIndex := 1
+      else getPosForTileIndex := 7;
+    end else begin
+      if tileX = 0 then getPosForTileIndex := 4 else
+      if tileX > 0 then getPosForTileIndex := 3
+      else getPosForTileIndex := 5;
+    end;
   end;
 
-  const totalSteps      : longint =  196(* 26501365 *);
+  const totalSteps      : longint =  74(* 26501365 *);
   var   tileY           : longint;
         endY            : longint;
         startX          : longint;
@@ -269,15 +280,9 @@ var map  : TMap;
         pos             : byte;
         foo             : word;
         p               : TProgressBar;
-        cache           : record
-           pos          : byte;
-           remain       : longint;
-           count        : array[Odd..Even] of word;
-        end;
   begin
   generateDMaps;
   result  := zero64;
-  cache.remain := -1;
 
   (* Here goes some assumptions about the layout of the input.
 
@@ -289,15 +294,15 @@ var map  : TMap;
      The issue is that the sample data provided does not have this property
      which makes debugging a pain in the ass.
    *)
-  offset  := dmaps[0].dmap^[positions[8].x_, positions[8].y_] + 1; (*+1 because the start was 0 here *)
+  offset  := dmaps[0].dmap^[positions[8].x_, positions[8].y_] + 1;
   tileSize:= dmaps[4].dmap^[positions[8].x_, positions[8].y_];
 
   endY := computeMissingTileIndex(0,totalSteps, offset, tileSize);
   initalParity := getParity(totalSteps);
 
-  p.init(endY+1,'calc...');
+  p.init(2*endY+1,'calc...');
 
-  for tileY := 0 to endY do begin
+  for tileY := -endY to endY do begin
 
     if getParity(tileY) = Odd then
       parity := reverseParity(initalParity)
@@ -313,10 +318,7 @@ var map  : TMap;
     remainYSteps:= totalSteps -
                      computeSteps(tileY, offset, tileSize);
 
-    if getParity(startX) = Odd then
-      parityX := reverseParity(parity)
-    else
-      parityX := parity;
+    parityX := getParity(remainSteps);
 
     (* +------ End  Tile    *)
     (* | +---- Even Tile    *)
@@ -329,36 +331,38 @@ var map  : TMap;
        if ( remainYSteps > dmaps[pos].max ) then
          add64LongInt(line, dmaps[pos].count[parity])
        else
-         add64LongInt(line, countPods(dmaps[pos].dmap^, remainYSteps, getParity(remainSteps), foo))
+         add64LongInt(line, countPods(dmaps[pos].dmap^, remainYSteps, getParity(remainYSteps), foo))
     end;
+    writeln('Line: ', uint64ToStr(line));
 
-    if numTilesX >= 1 then
+    if (numTilesX >= 1) and (startX > 0) then begin
+      (* First we have two ends *)
       pos := getPosForTileIndex(startX, tileY);
+      add64LongInt(line, countPods(dmaps[pos].dmap^, remainSteps, getParity(remainSteps),foo));
+      writeln('Line: ', uint64ToStr(line),' ',pos);
+
+
+      pos := getPosForTileIndex(-startX, tileY);
+      add64LongInt(line, countPods(dmaps[pos].dmap^, remainSteps, getParity(remainSteps),foo));
+      writeln('Line: ', uint64ToStr(line),' ',pos);
+
+      pos := getPosForTileIndex(startX, tileY);
+
       with dmaps[pos] do begin
-        if (cache.remain <> remainSteps) or (cache.pos <> pos) then begin
-          cache.pos    := pos;
-          cache.remain := remainSteps;
-          cache.count[Odd] := countPods(dmap^, remainSteps, Odd, foo);
-          cache.count[Even]:= countPods(dmap^, remainSteps, Even, foo);
-        end;
-
-        (* First we have two ends *)
-        add64LongInt(line, 2*cache.count[parityX]);
-
         (* The end cap handled above, now the parts on the line *)
         fromLongInt64(count[parity],tmp);
         mul64LongInt(tmp, (startX - 1)  div 2);
         fromLongInt64(count[reverseParity(parity)], tmp2);
         mul64LongInt(tmp2, (startX - 1 + 1) div 2);
         add64(tmp, tmp2);
-        shiftLeft64(1,tmp2);
+        shiftLeft64(1,tmp);
         add64(line, tmp);
+      end;
     end;
 
-    if tileY <> 0 then
-      shiftLeft64(1,line); (*Mirror to bottom halfe*)
-
     add64(result, line); (* Add the line to the result *)
+
+    writeln('TotalLine: ', uint64ToStr(line),' Result: ',uint64ToStr(result));
     p.step(1);
   end;
   p.done;
