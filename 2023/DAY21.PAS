@@ -272,7 +272,7 @@ var map  : TMap;
     end;
   end;
 
-  const totalSteps      : longint =  196(* 26501365 *);
+  function computeTotalSteps(const totalSteps: longint): comp;
   var   tileY           : longint;
         endY            : longint;
         startX          : longint;
@@ -289,7 +289,6 @@ var map  : TMap;
         foo             : word;
         p               : TProgressBar;
   begin
-  generateDMaps;
   result  := zero64;
 
   (* Here goes some assumptions about the layout of the input.
@@ -353,21 +352,17 @@ var map  : TMap;
        else
          add64LongInt(line,  dmaps[pos][remainYSteps])
     end;
-    writeln('Line: ', uint64ToStr(line));
 
     if (numTilesX >= 1) and (startX > 0) then begin
       (* First we have two ends *)
       pos := getPosForTileIndex(startX, tileY);
       add64LongInt(line, dmaps[pos][remainSteps]);
-      writeln('Line: ', uint64ToStr(line),' ',pos);
 
 
       pos := getPosForTileIndex(-startX, tileY);
       add64LongInt(line, dmaps[pos][remainSteps]);
-      writeln('Line: ', uint64ToStr(line),' ',pos);
 
       (* The edges may bleed into one tile further down the road *)
-      writeln('RemainXSteps: ', remainXSteps);
       if remainXSteps > 0 then begin
         pos := getPosForTileIndex(startX, tileY);
         add64LongInt(line, dmaps[pos][remainXSteps]);
@@ -398,13 +393,25 @@ var map  : TMap;
     end;
 
     add64(result, line); (* Add the line to the result *)
-
-    writeln('TotalLine: ', uint64ToStr(line),' Result: ',uint64ToStr(result));
     p.step(1);
   end;
   p.done;
 
-  part2 := uint64ToComp(result);
+  computeTotalSteps := uint64ToComp(result);
+end;
+const n        : comp = 202300;
+var p0, p1, p2 : comp;
+     a,  b, c  : comp;
+begin
+  generateDMaps;
+  p0 := computeTotalSteps(65);
+  p1 := computeTotalSteps(196);
+  p2 := computeTotalSteps(327);
+  a  := (p2 - 2*p1 + p0) / 2;
+  b  := (p1 - p0 - a);
+  c  := p0;
+
+  part2 := a*(n*n) + b*n + c;
 end;
 
 var input : Text;
@@ -414,10 +421,10 @@ begin
   clrscr;
   assign(input, InputFileName);
   reset(input);
-  (*
+
   p1 := part1(input);
-  writeln('Answert part1 is: ', p1);
-  *)
+  writeln('Answer to Part1 is: ', p1);
+  reset(input);
 
   p2 := part2(input);
   writeln('Answer to Part2 is: ',p2:1:0);
