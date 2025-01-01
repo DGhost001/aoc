@@ -12,6 +12,7 @@ uses crt,
 const InputFileName= 'INP\DAY21_IN.TXT';
       MaxX = 130;
       MaxY = 130;
+      Const MaxRange = MaxX + MaxY + 1;
 
 type  TDirection = (North, South, West, East);
       TPos = record
@@ -31,6 +32,7 @@ type  TDirection = (North, South, West, East);
       TMap = array [0..MaxY] of TOccupancy;
       PDistanceMap = ^TDistanceMap;
       TDistanceMap = array[0..MaxX,0..MaxY] of word;
+      TRangeMap    = array[0..MaxRange] of word;
 
 function adjustPosition(var pos: TPos;
                         const direction: TDirection): boolean;
@@ -83,28 +85,35 @@ end;
 procedure buildDistanceMap(const map       : TMap;
                            const start     : TPos;
                            const initalStep: word;
-                           var   dmap      : TDistanceMap);
+                           var   rangeMap  : TRangeMap);
 var heap : TMinHeap;
       bl : PBacklog;
       tmp: TPos;
-        d: TDirection;
-        p: TProgressbar;
+       d : TDirection;
+       p : TProgressbar;
+    dmap : PDistanceMap;
+       i : word;
 begin
-  fillchar(dmap,sizeof(dmap),$ff);
+  dmap := new(PDistanceMap);
+
+  fillchar(dmap^,sizeof(TDistanceMap),$ff);
+  fillchar(rangeMap, sizeof(TRangeMap),0);
   heap.init;
   heap.push(new(PBacklog,init(start,initalStep)));
   p.init(MaxX*MaxY,'crunch');
   while heap.size > 0 do begin
     bl := PBacklog(heap.pop);
     with bl^ do begin
-      if dmap[pos_.x_,pos_.y_] = $ffff then begin
+      if dmap^[pos_.x_,pos_.y_] = $ffff then begin
         p.step(1);
-        dmap[pos_.x_, pos_.y_] := dist_;
+        dmap^[pos_.x_, pos_.y_] := dist_;
+        assert(dist_ <= MaxRange,'Range out of bounds');
+        inc(rangeMap[dist_]);
         for d:= North to East do begin
             tmp := pos_;
             if adjustPosition(tmp,d) then begin
                if (not (tmp.x_ in map[tmp.y_])) and
-                  (dmap[tmp.x_, tmp.y_] = $ffff) then
+                  (dmap^[tmp.x_, tmp.y_] = $ffff) then
                     heap.push(new(PBacklog,init(tmp,dist_+1)));
             end;
         end;
@@ -114,6 +123,12 @@ begin
   end;
   p.done;
   heap.done;
+  dispose(dmap);
+
+  (* Propagate through *)
+  for i:= 2 to MaxRange do
+    inc(rangeMap[i],rangeMap[i-2]);
+
 end;
 
 function countPods(const dmap     : TDistanceMap;
@@ -179,16 +194,14 @@ end;
 
 function part1(var input: Text) : longint;
 var map  : TMap;
-    dmap : PDistancemap;
+    dmap : TRangeMap;
     start: TPos;
     tmp  : word;
 begin
   loadMap(input, map, start);
-  dmap := new(PDistancemap);
   writeln('Build distance map...');
-  buildDistanceMap(map, start, 0, dmap^);
-  part1  := countPods(dmap^, 64, getParity(64), tmp);
-  dispose(dmap);
+  buildDistanceMap(map, start, 0, dmap);
+  part1  := dmap[64];
 end;
 
 function part2(var input: Text): comp;
@@ -205,17 +218,13 @@ const positions : array[0..8] of TPos =
       );
 
 var map  : TMap;
-    dmaps: array[0..8] of record
-        dmap     : PDistancemap; (* Computed distance map from that point *)
-        count    : array [Odd..Even] of Word;
-        max      : word;
-    end;
+    dmaps: array[0..8] of TRangeMap;
 
   procedure generateDMaps;
   var start: TPos;
       p    : TProgressBar;
       i    : byte;
-      cache: File of TDistanceMap;
+      cache: File of TRangeMap;
       build:boolean;
   begin
     loadMap(input, map, start);
@@ -229,20 +238,18 @@ var map  : TMap;
     reset(cache);
     build := ioresult <> 0;
     {$I+}
-    if build then rewrite(cache);
-    for i:=0 to 8 do with dmaps[i] do begin
-      dmap := new(PDistancemap);
-      if build then begin
-        (* if i = 0 then *)
-          buildDistanceMap(map, positions[i], 0, dmap^)
-        (* else
-          buildDistanceMap(map, positions[i], 1, dmap^);*)
-      end else read(cache, dmap^);
-      count[Odd]  := countPods(dmap^,65535,Odd, max);
-      count[Even] := countPods(dmap^,65535,Even, max);
-      writeln('Position: ',i,' Odd:',count[Odd],' Even:', count[Even], ' Max:',max);
-      if build then write(cache, dmap^);
-      p.step(1);
+    if build then begin
+      rewrite(cache);
+      for i:=0 to 8 do begin
+          buildDistanceMap(map, positions[i], 0, dmaps[i]);
+          write(cache, dmaps[i]);
+          p.step(1);
+      end;
+    end else begin
+      for i:=0 to 8 do begin
+        read(cache, dmaps[i]);
+        p.step(1);
+      end;
     end;
     close(cache);
     p.done;
@@ -265,7 +272,7 @@ var map  : TMap;
     end;
   end;
 
-  const totalSteps      : longint =  74(* 26501365 *);
+  const totalSteps      : longint =  196(* 26501365 *);
   var   tileY           : longint;
         endY            : longint;
         startX          : longint;
@@ -273,6 +280,7 @@ var map  : TMap;
         numTilesX       : longint;
         remainSteps     : longint;
         remainYSteps    : longint;
+        remainXSteps    : longint;
         result,line,tmp, tmp2 : Uint64_t;
         initalParity    : TParity;
         parity          : TParity;
@@ -294,8 +302,8 @@ var map  : TMap;
      The issue is that the sample data provided does not have this property
      which makes debugging a pain in the ass.
    *)
-  offset  := dmaps[0].dmap^[positions[8].x_, positions[8].y_] + 1;
-  tileSize:= dmaps[4].dmap^[positions[8].x_, positions[8].y_];
+  offset  := (MaxX div 2) + 1;
+  tileSize:= MaxX+1;
 
   endY := computeMissingTileIndex(0,totalSteps, offset, tileSize);
   initalParity := getParity(totalSteps);
@@ -317,6 +325,15 @@ var map  : TMap;
                      computeSteps(tileY, offset, tileSize);
     remainYSteps:= totalSteps -
                      computeSteps(tileY, offset, tileSize);
+    if startX > 1 then
+      remainXSteps := totalSteps -
+                        computeSteps(startX - 1, offset, tileSize) -
+                        computeSteps(tileY, offset, tileSize)
+    else
+      remainXSteps := 0;
+    if remainXSteps > MaxRange then
+      if getParity(remainXSteps) = Odd then remainXSteps := MaxRange
+      else remainXSteps := MaxRange - 1;
 
     parityX := getParity(remainSteps);
 
@@ -328,32 +345,52 @@ var map  : TMap;
     if numTilesX >= 1 then begin
        pos := getPosForTileIndex(0, tileY);
        dec(numTilesX);
-       if ( remainYSteps > dmaps[pos].max ) then
-         add64LongInt(line, dmaps[pos].count[parity])
+       if ( remainYSteps > HIGH(dmaps[pos])) then
+         if getParity(remainYSteps) = Odd then
+            add64LongInt(line, dmaps[pos][MaxRange])
+         else
+            add64LongInt(line, dmaps[pos][MaxRange-1])
        else
-         add64LongInt(line, countPods(dmaps[pos].dmap^, remainYSteps, getParity(remainYSteps), foo))
+         add64LongInt(line,  dmaps[pos][remainYSteps])
     end;
     writeln('Line: ', uint64ToStr(line));
 
     if (numTilesX >= 1) and (startX > 0) then begin
       (* First we have two ends *)
       pos := getPosForTileIndex(startX, tileY);
-      add64LongInt(line, countPods(dmaps[pos].dmap^, remainSteps, getParity(remainSteps),foo));
+      add64LongInt(line, dmaps[pos][remainSteps]);
       writeln('Line: ', uint64ToStr(line),' ',pos);
 
 
       pos := getPosForTileIndex(-startX, tileY);
-      add64LongInt(line, countPods(dmaps[pos].dmap^, remainSteps, getParity(remainSteps),foo));
+      add64LongInt(line, dmaps[pos][remainSteps]);
       writeln('Line: ', uint64ToStr(line),' ',pos);
 
-      pos := getPosForTileIndex(startX, tileY);
+      (* The edges may bleed into one tile further down the road *)
+      writeln('RemainXSteps: ', remainXSteps);
+      if remainXSteps > 0 then begin
+        pos := getPosForTileIndex(startX, tileY);
+        add64LongInt(line, dmaps[pos][remainXSteps]);
 
-      with dmaps[pos] do begin
-        (* The end cap handled above, now the parts on the line *)
-        fromLongInt64(count[parity],tmp);
+        pos := getPosForTileIndex(-startX, tileY);
+        add64LongInt(line, dmaps[pos][remainXSteps]);
+      end;
+
+      if startX > 2 then begin
+      (* The end cap handled above, now the parts on the line *)
+        pos := getPosForTileIndex(startX, tileY);
+
+        if parity = Even then begin
+          fromLongInt64(dmaps[pos][MaxRange - 1],tmp);
+          fromLongInt64(dmaps[pos][MaxRange], tmp2);
+        end else begin
+          fromLongInt64(dmaps[pos][MaxRange],tmp);
+          fromLongInt64(dmaps[pos][MaxRange - 1], tmp2);
+        end;
+
         mul64LongInt(tmp, (startX - 1)  div 2);
-        fromLongInt64(count[reverseParity(parity)], tmp2);
         mul64LongInt(tmp2, (startX - 1 + 1) div 2);
+
         add64(tmp, tmp2);
         shiftLeft64(1,tmp);
         add64(line, tmp);
@@ -381,7 +418,9 @@ begin
   p1 := part1(input);
   writeln('Answert part1 is: ', p1);
   *)
+
   p2 := part2(input);
   writeln('Answer to Part2 is: ',p2:1:0);
+
   close(input);
 end.
