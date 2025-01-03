@@ -1,7 +1,7 @@
 unit utils;
 interface
 
-uses DeQueue,JString,stdint;
+uses DeQueue,JString,stdint,cassert;
 
 type
     TParity = (Odd, Even);
@@ -12,6 +12,9 @@ function countLines(var input : Text): longint;
 function getParity(const a: longint) : TParity;
 function isParity(const a: longint; const p: TParity):boolean;
 function reverseParity(const a: TParity) : TParity;
+
+function readInteger(var input: Text) : integer;
+
 
 implementation
 
@@ -27,6 +30,7 @@ begin
 
   parseUintArray := count;
 end;
+
 function countLines(var input : Text): longint;
 var count : longint;
 begin
@@ -55,6 +59,27 @@ begin
     reverseParity := Even
   else
     reverseParity := Odd;
+end;
+
+function readInteger(var input: Text) : integer;
+var s  : string;
+   code: integer;
+   result: integer;
+begin
+  s[0] := #0;
+  read(input, s[ord(s[0])+1]);
+  while (s[ord(s[0])+1] in [' ','+','-',#13,#10,#9,'0'..'9']) do begin
+    if s[ord(s[0])+1] in ['0'..'9'] then inc(s[0]) else
+    if (ord(s[0]) = 0) and (s[ord(s[0])+1] in ['+','-']) then inc(s[0])
+    else if (ord(s[0]) > 0) and (s[ord(s[0])+1] in ['+','-',' ',#13,#10,#9]) then
+      break;
+   if eof(input) then break;
+   read(input, s[ord(s[0])+1]);
+  end;
+
+  val(s, result, code);
+  readInteger := result;
+  assert(code = 0, 'Invalide number format');
 end;
 
 begin
