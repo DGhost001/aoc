@@ -24,6 +24,8 @@ uses ItemHandler, ProgressBar;
                 constructor init(item: PItemType);
                 constructor insertAfter(item: PItemType; other: PDeQueueIterator);
                 constructor insertBefore(item: PItemType; other: PDeQueueIterator);
+
+                procedure moveBefore(other: PDeQueueIterator);
         end;
 
         (* The actual DeQueue Object definition *)
@@ -50,6 +52,7 @@ uses ItemHandler, ProgressBar;
             procedure forEachP(lambda : TQueueLambda; progress : PProgressBar);
             procedure forEach(lambda : TQueueLambda);
 
+            procedure moveBefore( a, b: PDeQueueIterator); (* Move a before b *)
 
             private
                 first_ : PDeQueueIterator;
@@ -123,6 +126,20 @@ begin
   t := value_;
   value_ := other^.value_;
   other^.value_ := t;
+end;
+
+procedure TDeQueueIterator.moveBefore;
+begin
+  (*  Remove this iterator from the chain *)
+  if next_ <> NIL then next_^.prev_ := prev_;
+  if prev_ <> NIL then prev_^.next_ := next_;
+
+  (* No fiddle it back in *)
+  next_  := other;
+  prev_  := other^.prev_;
+  other^.prev_ := @self;
+
+  if prev_ <> NIL then prev_^.next_ := @self;
 end;
 
 constructor TDeQueue.init;
@@ -270,6 +287,15 @@ begin
   forEachP(lambda, progress);
   progress^.dispose;
 end;
+
+procedure TDeQueue.moveBefore;
+begin
+  if a = last_ then last_ := a^.prev_;
+  if b = first_ then first_ := a;
+
+  a^.moveBefore(b);
+end;
+
 
 begin
 end.
