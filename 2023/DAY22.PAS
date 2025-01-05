@@ -27,6 +27,12 @@ type TPoint = object
         clients : array[0..16] of PCube;
         support : array[0..16] of PCube;
 
+        desintigrate: record
+          run    : PCube;
+          number : byte;
+          count  : word;
+        end;
+
         constructor initf( var input: Text; const i : word);
         procedure setHeight( const z: integer);
         function compare(other:PItemType):TRelation;virtual;
@@ -34,7 +40,11 @@ type TPoint = object
         procedure addClient   (other : PCube); (* We are supporting   *)
         procedure report;
      end;
-
+     PBackLog = ^TBackLog;
+     TBackLog = object(ItemType)
+        value_ : PCube;
+        constructor init(v : PCube);
+     end;
 
 constructor TPoint.init(const x,y,z: integer);
 begin
@@ -82,6 +92,7 @@ begin
   if p2.z_ < p1.z_ then xchg(p1.z_, p2.z_);
   fillchar(clients, sizeof(clients),0);
   fillchar(support, sizeof(support),0);
+  fillchar(desintigrate, sizeof(desintigrate), 0);
 
   numClients := 0;
   numSupport := 0;
@@ -139,6 +150,12 @@ begin
     inc(numClients);
   end;
 end;
+
+constructor TBackLog.init(v : PCube);
+begin
+  value_ := v;
+end;
+
 
 function loadCubes(var input: Text): PDeQueue;
 var result : PDeQueue;
@@ -202,16 +219,12 @@ begin
   end;
 end;
 
-function part1(var input: Text): longint;
-var cubes : PDeQueue;
-    count : longint;
+function part1(cubes : PDeQueue): longint;
+var count : longint;
         it: PDeQueueIterator;
          i: byte;
         ok: boolean;
 begin
-  cubes := loadCubes(input);
-  compactCubes(cubes);
-
   it := cubes^.first;
   count := 0;
   while it<> nil do begin
@@ -230,26 +243,74 @@ begin
     it := it^.next;
   end;
 
-  cubes^.dispose;
   part1 := count;
 end;
 
-function part2(var input: Text): comp;
+procedure desintigrate(it : PDeQueueIterator); far;
+var backLog : PDeQueue;
+          i : byte;
+         bit: PDeQueueIterator;
+        cube: PCube;
+        c   : PCube;
 begin
+  backLog := new(PDeQueue, init);
+  cube  := PCube(it^.at);
+  with cube^ do
+    if numClients > 0 then
+      for i:=0 to numClients-1 do
+        backLog^.pushBack(new(PBackLog,init(clients[i])));
+
+  while backLog^.size  > 0 do begin
+    c:=  PBackLog(backLog^.first^.at)^.value_;
+    with c^ do begin
+        if desintigrate.run <> cube then begin
+          desintigrate.run := cube;
+          desintigrate.number := 1;
+        end else inc(desintigrate.number);
+        if desintigrate.number >= numSupport then begin
+          inc(cube^.desintigrate.count);
+          if numClients > 0 then
+            for i:=0 to numClients-1 do
+              backLog^.pushBack(new(PBackLog,init(clients[i])));
+        end;
+    end;
+    backlog^.popFront;
+  end;
+
+  backLog^.dispose;
+end;
+
+function part2(cubes  : PDeQueue): comp;
+var sum : comp;
+      it: PDeQueueIterator;
+begin
+  cubes^.foreach(desintigrate);
+  sum := 0;
+  it := cubes^.first;
+  while it<> nil do begin
+    sum := sum + PCube(it^.at)^.desintigrate.count;
+    it := it^.next;
+  end;
+  part2 := sum;
 end;
 
 var input: Text;
     p1   : longint;
     p2   : comp;
+    cubes: PDeQueue;
 begin
   clrscr;
   assign(input, InputFileName);
   reset(input);
-  p1 := part1(input);
 
-  writeln('Answer part1 is: ', p1);
-  reset(input);
-  p2 := part2(input);
-  writeln('Answer part2 is: ', p2);
+  cubes := loadCubes(input);
+  compactCubes(cubes);
   close(input);
+
+  p1 := part1(cubes);
+  writeln('Answer part1 is: ', p1);
+  p2 := part2(cubes);
+  writeln('Answer part2 is: ', p2:1:0);
+
+  cubes^.dispose;
 end.
