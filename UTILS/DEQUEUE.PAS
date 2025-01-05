@@ -283,7 +283,7 @@ end;
 procedure TDeQueue.forEach;
 var progress : PProgressBar;
 begin
-  progress := new(PProgressBar,init(size,'Processing...'));
+  progress := new(PProgressBar,init(size,'Calc..'));
   forEachP(lambda, progress);
   progress^.dispose;
 end;
