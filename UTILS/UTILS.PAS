@@ -5,6 +5,11 @@ uses DeQueue,JString,stdint,cassert;
 
 type
     TParity = (Odd, Even);
+    TPos    = record
+           x, y : longint;
+    end;
+
+    TDirection = (North, East, West, South);
 
 function parseUintArray(it : PDeQueueIterator; var numbers: array of Uint64_t) : word;
 function countLines(var input : Text): longint;
@@ -15,6 +20,9 @@ function reverseParity(const a: TParity) : TParity;
 
 function readInteger(var input: Text) : integer;
 
+procedure loadCharMap(var input: Text; var map; var maxX, maxY : word);
+
+function advancePos(var pos: TPos; const dir : TDirection; const min, max: TPos): boolean;
 
 implementation
 
@@ -80,6 +88,55 @@ begin
   val(s, result, code);
   readInteger := result;
   assert(code = 0, 'Invalide number format');
+end;
+
+procedure loadCharMap(var input: Text; var map; var maxX, maxY : word);
+type TCharArray = array[0..65534] of char;
+     PCharArray = ^TCharArray;
+var x, y, sx : word;
+    output   : PCharArray;
+    c        : char;
+begin
+  sx := 0;
+   y := 0;
+   output := PCharArray(@Map);
+   while (not eof(input)) and (y < maxY) do begin
+     read(input,c);
+     x:= 0;
+     while (c<> #10) and not eof(input) do begin
+       if ord(c) in [32..127] then begin
+         assert((x < MaxX) and (y < MaxY), 'Not enougth memory for given input map');
+         output^[x * maxX + y] := c;
+         inc(x);
+       end;
+       read(input, c);
+     end;
+     if sx = 0 then sx := x;
+     inc(y);
+   end;
+
+   maxX  := x;
+   maxY  := y;
+end;
+
+function advancePos(var pos: TPos;
+                    const dir : TDirection;
+                    const min, max: TPos): boolean;
+const Movment : array[TDirection] of TPos = (
+                 (x: 0; y: -1),
+                 (x: 1; y:  0),
+                 (x:-1; y:  0),
+                 (x: 0; y:  1));
+
+begin
+  inc(pos.x,Movment[dir].x);
+  inc(pos.y,Movment[dir].y);
+
+  advancePos := True;
+  if pos.x < min.x then begin pos.x := min.x; advancePos := False; end;
+  if pos.x > max.x then begin pos.x := max.x; advancePos := False; end;
+  if pos.y < min.y then begin pos.y := min.y; advancePos := False; end;
+  if pos.y > max.x then begin pos.x := max.y; advancePos := False; end;
 end;
 
 begin
