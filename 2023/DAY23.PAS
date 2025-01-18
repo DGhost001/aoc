@@ -1,12 +1,12 @@
 program day23;
-uses crt, utils, itemhandler, cassert;
-const  Wood     : char = '#';
-       Way      : char = '.';
-       NClif    : char = '^';
-       SClif    : char = 'v';
-       WClif    : char = '<';
-       EClif    : char = '>';
-       Crossing : char = 'N';
+uses crt, utils, itemhandler, cassert, progressbar;
+const  Wood     = '#';
+       Way      = '.';
+       NClif    = '^';
+       SClif    = 'v';
+       WClif    = '<';
+       EClif    = '>';
+       Crossing = 'N';
        InputFileName = 'INP\DAY23_IN.TXT';
        MapSize   = 141;
        minMap : TPos = (x : 0; y: 0);
@@ -94,12 +94,87 @@ begin
     scanForNodes := count;
 end;
 
+procedure markNodesInMap(var map: TMap; nodes: array of PNode);
+var i: word;
+begin
+  i := 0;
+  while (i <= HIGH(nodes)) and (nodes[i] <> NIL) do begin
+    with nodes[i]^.pos_ do
+      map.map[x, y] :=  Crossing;
+    inc(i);
+  end;
+end;
+
+procedure findNextNodes(var node  : PNode;
+                            nodes : array of PNode;
+                        const map : TMap);
+var p,np     : TPos;
+    min, max : TPos;
+    dir      : TDirection;
+      d      : TDirection;
+      nd     : TDirection;
+      steps  : word;
+      i      : word;
+begin
+ min.x := 0;
+ max.x := map.maxX;
+ min.y := 0;
+ max.y := map.maxY;
+
+ for dir := North to South do begin
+   p := node^.pos_;
+   d := dir;
+   steps := 0;
+   while advancePos(p, d, min, max) do begin
+     inc(steps);
+     case map.map[p.x, p.y] of
+        Crossing : break;
+        Wood     : break;
+        NClif    : nd := North;
+        EClif    : nd := East;
+        WClif    : nd := West;
+        SClif    : nd := South;
+        Way      : begin
+          nd := d;
+          repeat
+            np := p;
+            if advancePos(np,nd, min, max) then begin
+              if map.map[np.x, np.y] <> Wood then break;
+            end;
+            nd := nextDirection(d, nd);
+          until nd = d;
+        end;
+     end;
+     if nd = reverseDirection(d) then break;
+     d := nd;
+   end;
+   if (not posEqual(p,node^.pos_)) and (map.map[p.x,p.y] = Crossing) then begin
+     for i:= 0 to HIGH(nodes) do
+         if (nodes[i] <> NIL) and (posEqual(nodes[i]^.pos_, p)) then break;
+     node^.nextNodes_[dir].node     := nodes[i];
+     node^.nextNodes_[dir].distance := steps;
+   end else begin
+     node^.nextNodes_[dir].node     := NIL;
+     node^.nextNodes_[dir].distance := 0;
+   end;
+ end;
+end;
+
 function part1(var map : TMap): longint;
 var nodes    : array[0..128] of PNode;
     nodeCount: word;
     c        : word;
+    p        : TProgressbar;
 begin
   nodeCount := scanForNodes(map,nodes);
+  markNodesInMap(map, nodes);
+
+  p.init(nodeCount - 2,'meshing');
+  for c:=1 to nodeCount - 1 do begin
+    p.step(1);
+    findNextNodes(nodes[c], nodes, map);
+  end;
+  p.done;
 
   for c:= 0 to nodeCount - 1 do dispose(nodes[c]);
 end;

@@ -23,6 +23,10 @@ function readInteger(var input: Text) : integer;
 procedure loadCharMap(var input: Text; var map; var maxX, maxY : word);
 
 function advancePos(var pos: TPos; const dir : TDirection; const min, max: TPos): boolean;
+function posEqual(const p1, p2 : TPos): boolean;
+
+function nextDirection(const origin : TDirection; dir : TDirection): TDirection;
+function reverseDirection(const dir: TDirection): TDirection;
 
 implementation
 
@@ -138,6 +142,40 @@ begin
   if pos.y < min.y then begin pos.y := min.y; advancePos := False; end;
   if pos.y > max.x then begin pos.x := max.y; advancePos := False; end;
 end;
+
+function reverseDirection(const dir : TDirection): TDirection;
+begin
+   case dir of
+       North: reverseDirection  := South;
+       West : reverseDirection  := East;
+       East : reverseDirection  := West;
+       South: reverseDirection  := North;
+  end;
+end;
+
+function nextDirection(const origin : TDirection; dir : TDirection): TDirection;
+var noWay : TDirection;
+begin
+
+  noWay := reverseDirection(origin);
+
+  repeat
+    case dir of
+         North : dir := East;
+         East  : dir := South;
+         South : dir := West;
+         West  : dir := North;
+    end;
+  until noWay <> dir;
+
+  nextDirection := dir;
+end;
+
+function posEqual(const p1, p2 : TPos): boolean;
+begin
+  posEqual:= (p1.x = p2.x) and (p1.y = p2.y);
+end;
+
 
 begin
 end.
