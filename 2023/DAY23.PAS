@@ -1,5 +1,5 @@
 program day23;
-uses crt, utils, itemhandler, cassert, progressbar;
+uses crt, utils, itemhandler, cassert, progressbar, dequeue;
 const  Wood     = '#';
        Way      = '.';
        NClif    = '^';
@@ -15,13 +15,21 @@ const  Wood     = '#';
 type   PNode = ^TNode;
 
        TNode = object(ItemType)
+         visited_   : boolean;
+         distance_  : longint;
          pos_       : TPos;
          nextNodes_ : array[TDirection] of record
            node    : PNode;
            distance: word;
          end;
-         constructor init(pos: TPos);
+         constructor init(const pos: TPos);
 
+       end;
+
+       PNodeRef = ^TNodeRef;
+       TNodeRef = object (ItemType)
+          node_ : PNode;
+          constructor init(const node : PNode);
        end;
 
        TMap = record
@@ -29,8 +37,15 @@ type   PNode = ^TNode;
             map : array[0..MapSize,0..MapSize] of char;
        end;
 
-constructor TNode.init(pos: TPos);
+constructor TNodeRef.init(const node: PNode);
 begin
+  node_ := node;
+end;
+
+constructor TNode.init(const pos: TPos);
+begin
+  distance_ := -1;
+  visited_ := false;
   pos_ := pos;
   fillchar(nextNodes_,sizeof(nextNodes_),0);
 end;
@@ -160,11 +175,28 @@ begin
  end;
 end;
 
+procedure topologicalSort(node : PNode; stack : PDequeue);
+var d : TDirection;
+begin
+  if (node <> NIL) and (not node^.visited_) then begin
+    node^.visited_ := true;
+    for d:= North to South do begin
+      if (node^.nextNodes_[d].node <> NIL) and (not node^.nextNodes_[d].node^.visited_) then
+        topologicalSort(node^.nextNodes_[d].node, stack);
+    end;
+
+    stack^.pushBack(new(PNodeRef, init(node)));
+  end;
+end;
+
 function part1(var map : TMap): longint;
 var nodes    : array[0..128] of PNode;
     nodeCount: word;
     c        : word;
     p        : TProgressbar;
+    stack    : PDeQueue;
+    d        : TDirection;
+    tmp      : PNodeRef;
 begin
   nodeCount := scanForNodes(map,nodes);
   markNodesInMap(map, nodes);
@@ -175,7 +207,26 @@ begin
     findNextNodes(nodes[c], nodes, map);
   end;
   p.done;
+  stack := new(PDeQueue, init);
+  topologicalSort(nodes[1],stack);
+  nodes[1]^.distance_ := 0; (* Set Startnode to distance 0 *)
+  while stack^.size > 0 do begin
+     tmp := PNodeRef(stack^.back);
+     with tmp^ do begin
+       assert(node_^.distance_ >= 0,'Node has no distance');
+       for d:= North to South do begin
+         if (node_^.nextNodes_[d].node <> NIL) and
+            (node_^.nextNodes_[d].node^.distance_ < node_^.distance_ + node_^.nextNodes_[d].distance) then
+              node_^.nextNodes_[d].node^.distance_ :=
+                node_^.distance_ + node_^.nextNodes_[d].distance;
+       end;
+     end;
 
+     stack^.popBack;
+  end;
+
+  part1 := nodes[0]^.distance_;
+  stack^.dispose;
   for c:= 0 to nodeCount - 1 do dispose(nodes[c]);
 end;
 
