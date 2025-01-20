@@ -52,6 +52,7 @@ end;
 
 procedure loadMap(var input: Text; var map:  TMap);
 begin
+  fillchar(map,sizeof(map),0);
   map.maxX := MapSize + 1;
   map.maxY := MapSize + 1;
   loadCharMap(input, map.map, map.maxX, map.maxY);
@@ -175,6 +176,59 @@ begin
  end;
 end;
 
+procedure findNextNodes2(var node  : PNode;
+                            nodes : array of PNode;
+                        const map : TMap);
+var p,np     : TPos;
+    min, max : TPos;
+    dir      : TDirection;
+      d      : TDirection;
+      nd     : TDirection;
+      steps  : word;
+      i      : word;
+begin
+ min.x := 0;
+ max.x := map.maxX;
+ min.y := 0;
+ max.y := map.maxY;
+
+ for dir := North to South do begin
+   p := node^.pos_;
+   d := dir;
+   steps := 0;
+   while advancePos(p, d, min, max) do begin
+     inc(steps);
+     case map.map[p.x, p.y] of
+        Crossing : break;
+        Wood     : break;
+     else begin
+          nd := d;
+          repeat
+            np := p;
+            if advancePos(np,nd, min, max) then begin
+              if map.map[np.x, np.y] <> Wood then break;
+            end;
+            nd := nextDirection(d, nd);
+          until nd = d;
+        end;
+     end;
+     if nd = reverseDirection(d) then break;
+     d := nd;
+   end;
+   if (not posEqual(p,node^.pos_)) and (map.map[p.x,p.y] = Crossing) then begin
+     for i:= 0 to HIGH(nodes) do
+         if (nodes[i] <> NIL) and (posEqual(nodes[i]^.pos_, p)) then break;
+     node^.nextNodes_[dir].node     := nodes[i];
+     node^.nextNodes_[dir].distance := steps;
+   end else begin
+     node^.nextNodes_[dir].node     := NIL;
+     node^.nextNodes_[dir].distance := 0;
+   end;
+ end;
+end;
+
+
+
 procedure topologicalSort(node : PNode; stack : PDequeue);
 var d : TDirection;
 begin
@@ -230,18 +284,78 @@ begin
   for c:= 0 to nodeCount - 1 do dispose(nodes[c]);
 end;
 
+procedure longRecursive(node        : PNode;
+                       const dist  : longint;
+                       const finish: PNode;
+                       var   long  : longint);
+var d     : TDirection;
+begin
+  if keypressed then halt;
+  if node = finish then begin
+    if long < dist then begin
+     long := dist;
+     write(dist,' ');
+    end;
+  end else
+  begin
+    node^.visited_ := True;
+    for d:=North to South do with node^.nextNodes_[d] do begin
+     if (node <> NIL) and
+        (not node^.visited_) then begin
+            longRecursive(node,
+                            dist + distance,
+                            finish,long);
+     end;
+    end;
+    node^.visited_ := False;
+  end;
+end;
+
+function part2(var map : TMap): longint;
+var nodes    : array[0..128] of PNode;
+    nodeCount: word;
+    c,i      : word;
+    p        : TProgressbar;
+    count    : longint;
+    result   : longint;
+begin
+  nodeCount := scanForNodes(map,nodes);
+  writeln('Nodes: ',nodeCount);
+  markNodesInMap(map, nodes);
+
+  p.init(nodeCount - 2,'meshing');
+  for c:=1 to nodeCount - 1 do begin
+    p.step(1);
+    findNextNodes2(nodes[c], nodes, map);
+  end;
+
+  p.done;
+  result:=0;
+  longRecursive(nodes[1],0,nodes[0], result);
+  part2 := result;
+
+  for c:= 0 to nodeCount - 1 do dispose(nodes[c]);
+end;
 
 var map   : TMap;
     input : Text;
     p1    : longint;
+    p2    : longint;
 begin
   clrscr;
   assign(input, InputFileName);
   reset(input);
   loadMap(input, map);
-  close(input);
+  
 
   p1 := part1(map);
-
   writeln('Answer Part 1 is: ',p1);
+
+  reset(input);
+  loadMap(input,map);
+
+  p2 := part2(map);
+  writeln('Answer Part 2 is: ',p2);
+
+  close(input);
 end.
