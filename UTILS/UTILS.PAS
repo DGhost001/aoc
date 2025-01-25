@@ -28,6 +28,9 @@ function posEqual(const p1, p2 : TPos): boolean;
 function nextDirection(const origin : TDirection; dir : TDirection): TDirection;
 function reverseDirection(const dir: TDirection): TDirection;
 
+function dmax(const d1, d2: double): double;
+function dmin(const d1, d2: double): double;
+
 implementation
 
 function parseUintArray(it : PDeQueueIterator; var numbers: array of Uint64_t) : word;
@@ -176,6 +179,15 @@ begin
   posEqual:= (p1.x = p2.x) and (p1.y = p2.y);
 end;
 
+function dmax(const d1, d2: double): double;
+begin
+  if d1 > d2 then dmax := d1 else dmax:= d2;
+end;
+
+function dmin(const d1, d2: double): double;
+begin
+  if d1 < d2 then dmin := d1 else dmin := d2;
+end;
 
 begin
 end.

@@ -39,11 +39,15 @@ interface
       function transpose:PMatrix;
       procedure swapRow(const r1, r2: word);
 
-      procedure LUDecomposition(var L, U, P : PMatrix);
+      function LU(var idx: array of word; var d: integer): boolean;
+      procedure backSubstitution(const idx: array of word;  b : PMatrix);
 
-      procedure LU(var idx: array of word; var d: integer);
+      function det: double;
+      function inverse: boolean;
+
 
       procedure print;
+      function isVector: boolean;
 
       private
 
@@ -53,7 +57,7 @@ interface
     end;
 
 implementation
- uses cassert;
+ uses cassert, utils;
 
 type PMatArray = ^TMatArray;
      TMatArray = array[0..MatrixMaxDim*MatrixMaxDim] of double;
@@ -257,7 +261,7 @@ end;
    @param[out] idx This is the record of the row permuations
    @param[inout] d will be multiplied with -1 for every permutation
 *)
-procedure TMatrix.LU(var idx: array of word; var d: integer);
+function TMatrix.LU(var idx: array of word; var d: integer): boolean;
 var vv              : array[0..MatrixMaxDim] of double;
     i, imax, j, k,n : integer;
     big, sum, temp  : double;
@@ -275,7 +279,13 @@ begin
     big := 0;
     for j:=0 to n - 1 do
       if mat^[i*n + j] > big then big := mat^[i*n + j];
-    assert(big <> 0, 'Singular Matrix in LU Decompose');
+
+    (* Sigular Matrix ... can't decompose *)
+    if big = 0 then begin
+      LU := false;
+      exit;
+    end;
+
     vv[i] := 1.0 / big;
   end;
 
@@ -307,7 +317,11 @@ begin
 
     idx[j] := imax;
 
-    assert(mat^[j*n+j] <> 0,'Singular Matrix in LU Decompose');
+    (* Singular Matrix ... cant decompose *)
+    if mat^[j*n+j] = 0 then begin
+       LU := false;
+       exit;
+    end;
 
     if j <> (n-1) then begin
       temp := 1.0 / (mat^[j*n + j]);
@@ -315,66 +329,116 @@ begin
         mat^[i*n+j] := mat^[i*n+j] * temp;
     end;
   end;
+  LU := true;
 end;
 
-procedure TMatrix.LUDecomposition(var L, U, P : PMatrix);
-var n, i, j, k, r : word;
-    mat           : PMatArray;
-    max,tmp       : double;
-    A             : PMatrix;
+(* This is the backsubstitution as given by the numerical recepies.
+   The matrix must be LU decomposed before calling this function.
+   @param[in] idx This is the index as returned by the LU decompose
+   @param[inout] b This is b from the Equation A*x=b and will contain x
+                   after the execution of this function
+*)
+procedure TMatrix.backSubstitution(const idx: array of word;
+                                          b : PMatrix);
+var i,ii,ip,j,n : integer;
+    sum         : double;
+    mat         : PMatArray;
+    bv          : PMatArray;
 begin
-  assert(xdim_ = ydim_, 'Matrix is not square');
-  n   :=  xdim_ - 1; (* Define n,n to be the last element of the matrix ... *)
+  assert(xdim_ = ydim_, 'Matrix must be square');
+  assert(b^.isVector, 'b needs to be a vector');
+  assert(dmax(b^.xdim_, b^.ydim_) = xdim_,'Vector dimensions need to match');
+  assert(HIGH(idx) >= xdim_ - 1,'Index does not match matrix');
 
-  P := new(PMatrix, cEye(n + 1)); (* Permutation matrix start with an indentiy matrix *)
-  A := new(PMatrix, copy(@self));(* Create a copy, so this matrix stay as is *)
-  L := new(PMatrix, cEye(n+1));
+  n   := xdim_;
+  mat := PMatArray(matrix_);
+  bv  := PMatArray(b^.matrix_);
+  ii  := -1;
 
-  mat := PMatArray(A^.matrix_);
-
-  (* Find the pivot elements for the rows and rearange the matrix *)
-  for k:= 0 to n do begin
-    max := abs(mat^[k+xdim_*k]);
-    r := k;
-    for i:= k + 1 to n do
-      if max < abs(mat^[k + xdim_*i]) then begin
-        max := abs(mat^[k + xdim_*i]);
-        r := i;
-      end;
-
-    (* Check for degenerated matrix ... can't LU decompose ... *)
-    if max < 1e-15 then begin
-      P^.dispose;
-      A^.dispose;
-      L^.dispose;
-      P := NIL;
-      U := NIL;
-      exit;
-    end;
-
-    P^.swapRow(r,k);
-    A^.swapRow(r,k);
+  for i := 0 to n-1 do begin
+    ip := idx[i];
+    sum := bv^[ip];
+    bv^[ip] := bv^[i];
+    if ii >= 0 then
+      for j:=ii to i-1 do sum := sum - mat^[i*n+j]*bv^[j]
+    else if sum <> 0 then ii := i;
+    bv^[j] := sum;
   end;
 
-  (* Pivoting done, compute the LU decomp now *)
-  for i:=0 to n do begin
-    (* Compute the non-diagonal elements of L *)
-    for k:=i + 1 to n do begin
-       tmp := mat^[xdim_*k + i] / mat^[xdim_ * i + i];
-       PMatArray(L^.matrix_)^[xdim_*k + i] := tmp;
-       for j:= i to n do begin
-           mat^[xdim_ * k + j] := mat^[xdim_ * k + j] - tmp*mat^[xdim_*i+j]
-       end;
-    end;
+  for i := n-1 downto 0 do begin
+    sum := bv^[i];
+    for j:= i+1 to n-1 do
+      sum := sum - mat^[i*n+j]*bv^[j];
+    bv^[i] := sum / mat^[i*n+i];
+  end;
+end;
+
+function TMatrix.det: double;
+var   tmp    : PMatrix;
+      idx    : array[0..MatrixMaxDim] of word;
+      d      : integer;
+      i      : integer;
+      m      : double;
+
+begin
+  tmp := new(PMatrix, copy(@self));
+
+  if not tmp^.LU(idx, d) then begin
+    det := 0;
+    exit;
   end;
 
-  (* Clean the rounding errors in the lower halfe of A *)
-  for i:=1 to n do
-   for k:=0 to i-1 do
-     mat^[xdim_*i+k] := 0;
+  m := d;
 
-  (* After all the math U is A *)
-  U := A;
+  for i:=0 to xdim_ - 1 do
+    m:= m * PMatArray(tmp^.matrix_)^[i*xdim_+i];
+
+  det := m;
+
+  tmp^.dispose;
+end;
+
+function TMatrix.inverse: boolean;
+var   result : PMatrix;
+      col    : PMatrix;
+      idx    : array[0..MatrixMaxDim] of word;
+      d      : integer;
+      i,j    : integer;
+      tmp    : Pointer;
+begin
+  assert(xdim_ = ydim_, 'Matrix must be square');
+
+  result := new(PMatrix, cZeroMatrix(xdim_, ydim_));
+  col    := new(PMatrix, cZeroMatrix(xdim_,1));
+
+  if not LU(idx, d) then begin
+    inverse := false;
+    exit;
+  end;
+  for j:=0 to xdim_ - 1 do begin
+
+    for i:=0 to xdim_ -1 do PMatArray(col^.matrix_)^[i] := 0;
+    PMatArray(col^.matrix_)^[j] := 1;
+
+    backSubstitution(idx, col);
+
+    for i:=0 to xdim_ - 1 do PMatArray(result^.matrix_)^[i*xdim_+j] :=
+      PMatArray(col^.matrix_)^[i];
+  end;
+
+  (* Move the result into our own object *)
+  tmp := matrix_;
+  matrix_ := result^.matrix_;
+  result^.matrix_ := tmp;
+
+  result^.dispose;
+  col^.dispose;
+  inverse := true;
+end;
+
+function TMatrix.isVector: boolean;
+begin
+  isVector := (xdim_ = 1) or (ydim_ = 1);
 end;
 
 begin
