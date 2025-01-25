@@ -19,6 +19,7 @@ function isParity(const a: longint; const p: TParity):boolean;
 function reverseParity(const a: TParity) : TParity;
 
 function readInteger(var input: Text) : integer;
+function readComp(var input: Text) : comp;
 
 procedure loadCharMap(var input: Text; var map; var maxX, maxY : word);
 
@@ -94,6 +95,27 @@ begin
 
   val(s, result, code);
   readInteger := result;
+  assert(code = 0, 'Invalide number format');
+end;
+
+function readComp(var input: Text) : comp;
+var s  : string;
+   code: integer;
+   result: comp;
+begin
+  s[0] := #0;
+  read(input, s[ord(s[0])+1]);
+  while (s[ord(s[0])+1] in [' ','+','-',#13,#10,#9,'0'..'9']) do begin
+    if s[ord(s[0])+1] in ['0'..'9'] then inc(s[0]) else
+    if (ord(s[0]) = 0) and (s[ord(s[0])+1] in ['+','-']) then inc(s[0])
+    else if (ord(s[0]) > 0) and (s[ord(s[0])+1] in ['+','-',' ',#13,#10,#9]) then
+      break;
+   if eof(input) then break;
+   read(input, s[ord(s[0])+1]);
+  end;
+
+  val(s, result, code);
+  readComp := result;
   assert(code = 0, 'Invalide number format');
 end;
 

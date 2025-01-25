@@ -20,7 +20,7 @@ begin
     textColor(lightGray);
     writeln('"');
     writeln('Aborting...');
-    runError(300);
+     runError(300);
   end;
 end;
 
