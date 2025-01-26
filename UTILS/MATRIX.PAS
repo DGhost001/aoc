@@ -49,6 +49,8 @@ interface
       procedure print;
       function isVector: boolean;
 
+      procedure setCol(const col: word; const v : PMatrix);
+
       private
 
       procedure allocateMatrix(const sx,sy   : word;
@@ -362,7 +364,7 @@ begin
     if ii >= 0 then
       for j:=ii to i-1 do sum := sum - mat^[i*n+j]*bv^[j]
     else if sum <> 0 then ii := i;
-    bv^[j] := sum;
+    bv^[i] := sum;
   end;
 
   for i := n-1 downto 0 do begin
@@ -439,6 +441,16 @@ end;
 function TMatrix.isVector: boolean;
 begin
   isVector := (xdim_ = 1) or (ydim_ = 1);
+end;
+
+procedure TMatrix.setCol(const col: word; const v : PMatrix);
+var i : integer;
+begin
+  assert(v^.isVector, 'Column vector required.');
+  assert(v^.xdim_ = ydim_, 'Vector dimension need to match matrix y');
+
+  for i:= 0 to ydim_-1 do
+    PMatArray(matrix_)^[i*xdim_ + col] := PMatArray(v^.matrix_)^[i];
 end;
 
 begin

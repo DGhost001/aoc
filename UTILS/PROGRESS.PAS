@@ -139,7 +139,8 @@ end;
 procedure TProgressBar.step;
 begin
  inc(progress_,progress);
-
+ if keypressed then
+   if readkey = #27 then halt;
  if progress_ > maxCount_ then progress := maxCount_;
  if (progress_ - lastUpdate_ >= update_) or
     (progress_ = maxCount_)
