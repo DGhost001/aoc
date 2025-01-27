@@ -1,8 +1,8 @@
 program day24;
 uses utils, matrix, crt, dequeue,ItemHandler,Progressbar;
 const InputFileName = 'INP\DAY24_IN.TXT';
-      MinBox : double = 200000000000000.0;
-      MaxBox : double = 400000000000000.0;
+      MinBox : double =  200000000000000.0 (*7*);
+      MaxBox : double =  400000000000000.0 (*27*);
 
 
 type PLine = ^TLine;
@@ -47,10 +47,16 @@ begin
 
   if a^.lu(idx,d) then begin
     a^.backSubstitution(idx,x);
+    x^.mulv(-1); (* We solved A*x = b *)
+                 (* Take x to the other side of the equation *)
+                 (* So we can do m*x + n                     *)
 
-    result := new(PMatrix, copy(m_));
-    result^.mulv(x^.at(0,0));
-    result^.add(n_);
+    (* Only positiv collisions count *)
+    if (x^.at(0,0) >= 0) and (x^.at(1,0) >=0) then begin
+      result := new(PMatrix, copy(m_));
+      result^.mulv(x^.at(0,0));
+      result^.add(n_);
+    end else result := NIL
 
   end else
     result := NIL;
@@ -129,6 +135,7 @@ end;
 var input : Text;
     p1    : longint;
 begin
+  clrscr;
   assign(input, InputFileName);
   reset(input);
   p1 := part1(input);

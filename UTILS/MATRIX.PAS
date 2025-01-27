@@ -280,7 +280,7 @@ begin
   for i:=0 to n - 1 do begin
     big := 0;
     for j:=0 to n - 1 do
-      if mat^[i*n + j] > big then big := mat^[i*n + j];
+      if abs(mat^[i*n + j]) > big then big := abs(mat^[i*n + j]);
 
     (* Sigular Matrix ... can't decompose *)
     if big = 0 then begin
