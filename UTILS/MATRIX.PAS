@@ -50,6 +50,7 @@ interface
       function isVector: boolean;
 
       procedure setCol(const col: word; const v : PMatrix);
+      procedure setRow(const row: word; const v : PMatrix);
 
       private
 
@@ -451,6 +452,16 @@ begin
 
   for i:= 0 to ydim_-1 do
     PMatArray(matrix_)^[i*xdim_ + col] := PMatArray(v^.matrix_)^[i];
+end;
+
+procedure TMatrix.setRow(const row: word; const v : PMatrix);
+var i : integer;
+begin
+  assert(v^.isVector, 'Column vector required.');
+  assert(v^.xdim_ = xdim_, 'Vector dimension need to match matrix y');
+
+  for i:= 0 to xdim_-1 do
+    PMatArray(matrix_)^[row*xdim_ + i] := PMatArray(v^.matrix_)^[i];
 end;
 
 begin
