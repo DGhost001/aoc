@@ -1,6 +1,6 @@
 program day25;
 (* This is the implementation for day 25 of the AOC 2023 *)
-uses ItemHandler,cassert, dequeue, JString, ProgressBar, utils;
+uses ItemHandler,cassert, dequeue, JString, ProgressBar, utils, sort;
 
 const InputFileName = 'INP\DAY25_INP.TXT';
 type  TGroup = (None, Group1, Group2);
@@ -22,18 +22,42 @@ type  TGroup = (None, Group1, Group2);
         destructor done; virtual;
 
         procedure   addEdge(node : PNode; const weight : word);
+        function    majorNeighbourGroup : TGroup;
+        function    isBorderNode : boolean;
+        function    numBorderConnections : word;
       end;
 
       PNodeBackLog = ^TNodeBackLog;
       TNodeBackLog = object(ItemType)
-        node_ : PNode;
+        node_              : PNode;
+        borderConnections_ : word;
 
         constructor init(node : PNode);
+        function compare(other:PItemType):TRelation; virtual;
+        function update : word;
       end;
 
 constructor TNodeBackLog.init(node: PNode);
 begin
   node_ := node;
+  borderConnections_ := node^.numBorderConnections;
+end;
+
+function TNodeBackLog.compare(other:PItemType):TRelation;
+var o: PNodeBackLog;
+begin
+  o := PNodeBackLog(other);
+
+  if borderConnections_ > o^.borderConnections_ then compare := Bigger else
+  if borderConnections_ < o^.borderConnections_ then compare := Smaller else
+  compare := Equal;
+
+end;
+
+function TNodeBackLog.update: word;
+begin
+  borderConnections_ := node_^.numBorderConnections;
+  update := borderConnections_;
 end;
 
 constructor TEdge.init(const next: PNode; const weight : word);
@@ -57,6 +81,50 @@ end;
 procedure TNode.addEdge(node : PNode; const weight : word);
 begin
   edges_^.pushBack(new(PEdge, init(node, weight)));
+end;
+
+function TNode.majorNeighbourGroup : TGroup;
+var  it: PDeQueueIterator;
+     i : integer;
+begin
+  it := edges_^.first;
+  i  := 0;
+  while it <> nil do begin
+    if PEdge(it^.at)^.next_^.group_ = Group1 then inc(i) else
+    if PEdge(it^.at)^.next_^.group_ = Group2 then dec(i);
+    it := it^.next;
+  end;
+
+  if i > 0 then majorNeighbourGroup:= Group1 else
+  if i < 0 then majorNeighbourGroup:= Group2 else
+  majorNeighbourGroup:= group_;
+end;
+
+function TNode.isBorderNode : boolean;
+var it    : PDeQueueIterator;
+    result: boolean;
+begin
+  it      := edges_^.first;
+  result  := false;
+  while (it <> nil) and (not result) do begin
+    result := PEdge(it^.at)^.next_^.group_ <> group_;
+    it := it^.next;
+  end;
+  isBorderNode := result;
+end;
+
+function TNode.numBorderConnections : word;
+var it    : PDeQueueIterator;
+    result: word;
+begin
+  it      := edges_^.first;
+  result  := 0;
+  while (it <> nil) do begin
+    if PEdge(it^.at)^.next_^.group_ <> group_ then inc(result);
+    it := it^.next;
+  end;
+
+  numBorderConnections:= result;
 end;
 
 procedure buildGraph(var input:Text; var graph : PDeQueue);
@@ -186,6 +254,69 @@ begin
   p.done;
   queue^.dispose;
 end;
+
+procedure minimizeBorder(graph : PDeQueue);
+
+ function findBorder(graph : PDeQueue; var border: PDeQueue): word;
+ var result : word;
+          b : PNodeBackLog;
+         it : PDeQueueIterator;
+          n : PNode;
+ begin
+   border := new(PDeQueue, init);
+   it := graph^.first;
+   result := 0;
+
+   while it <> nil do begin
+     n := PNode(it^.at);
+     if n^.isBorderNode then begin
+       b := new(PNodeBackLog,init(n));
+       inc(result, b^.borderConnections_);
+       border^.pushBack(b);
+     end;
+     it := it^.next;
+   end;
+
+   sortQueue(border);
+ end;
+
+ function getBorderLength(const border: PDeQueue): word;
+ var result : word;
+         it : PDeQueueIterator;
+ begin
+   result := 0;
+   it := border^.first;
+   while it <> NIL do begin
+      inc(result, PNodeBackLog(it^.at)^.update);
+      it := it^.next;
+   end;
+   getBorderLength := result;
+ end;
+
+ function findNode(border: PDeQueue; n : PNode) : PDeQueueIterator;
+ var it : PDeQueueIterator;
+ begin
+   it := border^.first;
+   while (it <> nil) and
+         (PNodeBackLog(it^.at)^.node_ <> n) do it := it^.next;
+   findNode := it;
+ end;
+
+ procedure swapNode(node : PNode; border : PDeQueue);
+ var it1, it2 : PDeQueueIterator;
+ begin
+   node^.group_ := node^.majorNeighbourGroup;
+   it1 := node^.edges_^.first;
+
+   while it1 <> nil do begin
+     ...
+     it1 := it1^.next;
+   end;
+ end;
+
+begin
+end;
+
 
 function part1(var input: Text) : longint;
 var graph : PDeQueue;
