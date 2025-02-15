@@ -2,7 +2,7 @@ program day25;
 (* This is the implementation for day 25 of the AOC 2023 *)
 uses ItemHandler,cassert, dequeue, JString, ProgressBar, utils, sort;
 
-const InputFileName = 'INP\DAY25_INP.TXT';
+const InputFileName = 'INP/DAY25_IN.TXT';
 type  TGroup = (None, Group1, Group2);
       PNode = ^TNode;
       PEdge = ^TEdge;
@@ -25,6 +25,7 @@ type  TGroup = (None, Group1, Group2);
         function    majorNeighbourGroup : TGroup;
         function    isBorderNode : boolean;
         function    numBorderConnections : word;
+        procedure   invertGroup;
       end;
 
       PNodeBackLog = ^TNodeBackLog;
@@ -127,6 +128,12 @@ begin
   numBorderConnections:= result;
 end;
 
+procedure TNode.invertGroup;
+begin
+  if group_ = Group1 then group_ := Group2 else
+  if group_ = Group2 then group_ := Group1;
+end;
+
 procedure buildGraph(var input:Text; var graph : PDeQueue);
  function getNodeId(const node : PJString) : word;
  var it     : PJStringIterator;
@@ -173,7 +180,6 @@ procedure buildGraph(var input:Text; var graph : PDeQueue);
 var  line  : PJString;
     sline  : PJString;
      tokens: PDeQueue;
-     edges : PDeQueue;
      it    : PDeQueueIterator;
      node  : PNode;
         p  : TProgressBar;
@@ -208,17 +214,26 @@ begin
   p.done;
 end;
 
-procedure colorGraph(graph : PDeQueue);
+procedure colorGraph(graph : PDeQueue; startNode: Integer);
 var queue : PDeQueue;
     it    : PDeQueueIterator;
     n1, n2: PNode;
     i     : integer;
     p     : TProgressBar;
 begin
-  queue := new(PDeQueue,init);
-  n1 := PNode(graph^.at(0));
-  n2 := PNode(graph^.at(1));
+  (* Reset all nodes to None *)
+  it := graph^.first;
+  while it <> nil do begin
+    PNode(it^.at)^.group_ := None;
+    it := it^.next;
+  end;
 
+  queue := new(PDeQueue,init);
+  repeat
+    n1 := PNode(graph^.at(random(graph^.size)));
+    n2 := PNode(graph^.at(random(graph^.size))); 
+  until n1 <> n2;
+  
   n1^.group_ := Group1;
   n2^.group_ := Group2;
 
@@ -255,7 +270,7 @@ begin
   queue^.dispose;
 end;
 
-procedure minimizeBorder(graph : PDeQueue);
+function minimizeBorder(graph : PDeQueue): boolean;
 
  function findBorder(graph : PDeQueue; var border: PDeQueue): word;
  var result : word;
@@ -278,6 +293,7 @@ procedure minimizeBorder(graph : PDeQueue);
    end;
 
    sortQueue(border);
+   findBorder := result;
  end;
 
  function getBorderLength(const border: PDeQueue): word;
@@ -302,30 +318,85 @@ procedure minimizeBorder(graph : PDeQueue);
    findNode := it;
  end;
 
- procedure swapNode(node : PNode; border : PDeQueue);
+ procedure setGroup(node: PNode; border: PDeQueue; group: TGroup);
  var it1, it2 : PDeQueueIterator;
+          n2  : PNode;
  begin
-   node^.group_ := node^.majorNeighbourGroup;
-   it1 := node^.edges_^.first;
+  node^.group_ := group;
+  it1 := node^.edges_^.first;
 
-   while it1 <> nil do begin
-     ...
-     it1 := it1^.next;
+  while it1 <> nil do begin
+      n2 := PEdge(it1^.at)^.next_;
+      it2 := findNode(border,n2);
+      
+      if (it2 <> nil) and (not n2^.isBorderNode) then
+        border^.remove(it2)
+      else if (it2 = nil) and (n2^.isBorderNode) then
+        border^.pushBack(new(PNodeBackLog,init(n2)));
+      it1 := it1^.next;
+  end;
+  sortQueue(border);   
+ end;
+ 
+ 
+ function swapNode(node : PNode; border : PDeQueue) : boolean;
+ var g   : TGroup;
+ begin
+   g := node^.majorNeighbourGroup;
+   swapNode := g <> node^.group_;
+   if g <> node^.group_ then begin
+      setGroup(node, border, g);
    end;
  end;
 
+var border: PDeQueue;
+        it: PDeQueueIterator;
+         n: PNode;
 begin
+  findBorder(graph, border);
+  while getBorderLength(border) <> 3 do begin
+    it := border^.last;
+    while (it <> nil) and (not swapNode(PNodeBackLog(it^.at)^.node_, border)) do
+      it := it^.prev;
+    
+    (* If we cannot find a node to swap, we swap the first one and see if it helps *)
+    if it = nil then begin
+      WriteLn('Border length: ',getBorderLength(border),' ');
+      minimizeBorder := False;
+      exit;
+    end;
+  end;
+  WriteLn('Border length: ',getBorderLength(border),' ');
+  minimizeBorder := True;
+  border^.dispose;
 end;
 
-
 function part1(var input: Text) : longint;
-var graph : PDeQueue;
+var graph  : PDeQueue;
+    c1, c2 : LongInt;
+        it : PDeQueueIterator;
+        i  : Integer;
 begin
+  c1 := 0;
+  c2 := 0;
+  i  := 1;
+  
   buildGraph(input, graph);
-  colorGraph(graph);
+  
+  repeat
+    colorGraph(graph,i);
+    inc(i);
+  until minimizeBorder(graph) or (i >= graph^.size);
+
+  it := graph^.first;
+  while it <> nil do begin
+    if PNode(it^.at)^.group_ = Group1 then inc(c1) else
+    if PNode(it^.at)^.group_ = Group2 then inc(c2);
+    it := it^.next;
+  end;
 
   graph^.dispose;
-  part1 := 0;
+  part1 := c1 * c2;
 end;
 
 var input : Text;
