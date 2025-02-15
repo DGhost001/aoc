@@ -59,7 +59,6 @@ end;
 
 destructor TProgressBar.done;
 var oldWinMin, oldWinMax, x, y : word;
-    i,j                        : longint;
 begin
  lastUpdate_ := progress_;
 
@@ -81,7 +80,7 @@ end;
 procedure TProgressBar.draw;
 var oldWinMin, oldWinMax, x, y : word;
     i,j                        : longint;
-    time,left,tmp              : TClock;
+    time,left                  : TClock;
     h,eh,m,em,s,es             : word;
     pr                         : real;
 begin
