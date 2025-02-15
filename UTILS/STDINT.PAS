@@ -622,7 +622,10 @@ function isEqual32(var a,b: Uint32_t): boolean;
 begin
    halt(-1); (*Not implemented yet...*)
 end;
-
+procedure shiftLeft64(count: byte; var a: Uint64_t);
+begin
+  halt(-1); (*Not implemented yet... *)
+end;
 {$ENDIF}
 
 function isGreater64(var a,b: Uint64_t): boolean;     (* a > b  *)
