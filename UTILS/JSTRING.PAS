@@ -355,6 +355,7 @@ var it      : PJStringIterator;
 begin
     it := self.first;
     while it^.valid do begin
+        tmp  := it^.at;
         tmp^ := UpCase(tmp^);
         it^.next;
     end;
@@ -389,6 +390,8 @@ var
 begin
     beginning := self.first;
     ending    := self.last;
+    spaceBefore := 0;
+    spaceAfter := 0;
 
     while beginning^.valid and isSpace(beginning^.at^) do begin
         inc(spaceBefore);
