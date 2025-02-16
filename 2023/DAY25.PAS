@@ -1,16 +1,22 @@
 program day25;
 (* This is the implementation for day 25 of the AOC 2023 *)
-uses ItemHandler,cassert, dequeue, JString, ProgressBar, utils, sort;
+uses ItemHandler,cassert, dequeue, JString, ProgressBar, utils, sort, crt;
 
-const InputFileName = 'INP/DAY25_TE.TXT';
+const InputFileName = 'INP/DAY25_IN.TXT';
 type  TGroup = (None, Group1, Group2);
       PNode = ^TNode;
       PEdge = ^TEdge;
       TEdge = object(ItemType)
-        next_  : PNode;
-        weight_: word;
+       
         constructor  copy(const other : PEdge);
         constructor  init(const next: PNode; const weight : word);
+        
+        function next : PNode;
+        procedure setNext(const next: PNode);
+        
+        private
+            next_  : PNode;
+            weight_: word;
       end;
 
       TNode = object (ItemType)
@@ -29,6 +35,7 @@ type  TGroup = (None, Group1, Group2);
         function    isBorderNode : boolean;
         function    numBorderConnections : word;
         procedure   invertGroup;
+        procedure   verify;
       end;
 
       PNodeBackLog = ^TNodeBackLog;
@@ -72,8 +79,22 @@ end;
 
 constructor TEdge.copy(const other: PEdge);
 begin
+  assert(typeof(other^) = typeof(TEdge), 'Invalid Edge type');
+  assert(typeof(other^.next_^) = typeof(TNode), 'Invalid Node type');
   next_ := other^.next_;
   weight_ := other^.weight_;
+end;
+
+function TEdge.next : PNode;
+begin
+  assert(typeof(next_^) = typeof(TNode), 'Invalid Node type ');
+  next := next_;
+end;
+
+procedure TEdge.setNext(const next: PNode);
+begin
+  assert(typeof(next^) = typeof(TNode), 'Invalid Node type');
+  next_ := next;
 end;
 
 constructor TNode.init(const id : word);
@@ -87,6 +108,7 @@ end;
 constructor TNode.copy(const other : PNode);
 var it : PDeQueueIterator;
 begin
+  assert(typeof(other^) = typeof(TNode), 'Invalid Node type');
   id_ := other^.id_;
 
   edges_ := new(PDeQueue, init);
@@ -101,7 +123,26 @@ begin
 end;
 
 destructor TNode.done;
+var it1, it2 : PDeQueueIterator;
+           n : PNode;
 begin
+  it1 := edges_^.first;
+
+  (* Go through all edges and remove the reverse references *)
+  while it1 <> Nil do begin
+    n := PEdge(it1^.at)^.next;
+    it2 := n^.edges_^.first;
+
+    while it2 <> nil do begin
+      it2 := n^.edges_^.first;
+      while (it2 <> nil) and (PEdge(it2^.at)^.next <> @self) do it2 := it2^.next;
+      if it2 <> nil then n^.edges_^.remove(it2);
+    end;
+
+    it1 := it1^.next;
+  end;
+
+  (* Dispose the edges *)
   edges_^.dispose;
 end;
 
@@ -111,24 +152,24 @@ begin
 end;
 
 procedure TNode.merge(const node : PNode);
-var it1, it2   : PDeQueueIterator;
-    edge, edge2: PEdge;
+var it1             : PDeQueueIterator;
+    edge            : PEdge;
+    otherNode       : PNode;
 begin
   it1 := node^.edges_^.first;
+
   while it1 <> nil do begin
    edge := PEdge(it1^.at);
-   if edge^.next_ <> @self then begin
-     edge := new(PEdge,copy(edge));
-     it2 := edge^.next_^.edges_^.first;
-
-     (* Go through the remote edges and clean reverse references *)
-     while it2 <> nil do begin
-       edge2 := PEdge(it2^.at);
-       if edge2^.next_ = node then edge2^.next_ := @self;
-       it2 := it2^.next;
-     end;
-
-     edges_^.pushBack(edge);
+   assert(typeof(edge^) = typeof(TEdge), 'Invalid Edge type');
+   
+   otherNode := edge^.next;
+  
+   (* Check if the edge points not to our self *)
+   if (otherNode <> @self) then begin
+     
+     edges_^.pushBack(new(PEdge,copy(edge))); (* Copy the edge *)    
+     otherNode^.edges_^.pushBack(new(PEdge,init(@self, edge^.weight_))); (* Add the reverse edge *)
+   
    end;
    it1 := it1^.next;
   end;
@@ -142,8 +183,8 @@ begin
   it := edges_^.first;
   i  := 0;
   while it <> nil do begin
-    if PEdge(it^.at)^.next_^.group_ = Group1 then inc(i) else
-    if PEdge(it^.at)^.next_^.group_ = Group2 then dec(i);
+    if PEdge(it^.at)^.next^.group_ = Group1 then inc(i) else
+    if PEdge(it^.at)^.next^.group_ = Group2 then dec(i);
     it := it^.next;
   end;
 
@@ -159,7 +200,7 @@ begin
   it      := edges_^.first;
   result  := false;
   while (it <> nil) and (not result) do begin
-    result := PEdge(it^.at)^.next_^.group_ <> group_;
+    result := PEdge(it^.at)^.next^.group_ <> group_;
     it := it^.next;
   end;
   isBorderNode := result;
@@ -172,12 +213,24 @@ begin
   it      := edges_^.first;
   result  := 0;
   while (it <> nil) do begin
-    if PEdge(it^.at)^.next_^.group_ <> group_ then inc(result);
+    if PEdge(it^.at)^.next^.group_ <> group_ then inc(result);
     it := it^.next;
   end;
 
   numBorderConnections:= result;
 end;
+
+procedure TNode.verify;
+var it1 : PDeQueueIterator;
+begin
+  it1 := edges_^.first;
+  while it1 <> nil do begin
+    assert(typeof(it1^.at^) = typeof(TEdge), 'Invalid Edge type');
+    assert(typeof(PEdge(it1^.at)^.next^) = typeof(TNode), 'Invalid Node type');
+    it1 := it1^.next;
+  end;
+end;  
+  
 
 procedure TNode.invertGroup;
 begin
@@ -288,7 +341,7 @@ begin
     it2 := n2^.edges_^.first;
     while it2 <> nil do begin
       edge := PEdge(it2^.at);
-      edge^.next_ := findNode(result, edge^.next_^.id_);
+      edge^.setNext(findNode(result, edge^.next_^.id_));
       it2 := it2^.next;
     end;
 
@@ -323,13 +376,13 @@ procedure kargerStein(graph      : PDeQueue;
     while graph^.size > threshold do begin
       (* Find a random edge from the graph *)
       n1 := PNode(graph^.at(random(graph^.size)));
-      n2 := PEdge(n1^.edges_^.at(random(n1^.edges_^.size)))^.next_;
+      n2 := PEdge(n1^.edges_^.at(random(n1^.edges_^.size)))^.next;
       mergeNodesInGraph(graph, n1,n2); (* Collaps the edge *)
     end;
   end;
 
-  function minCut(graph : PDeQueue; var c1, c2 : word) : word;
-  var g1, g2   : PDeQueue;
+  function minCut(graph : PDeQueue; var c1, c2 : word; var p: TProgressBar) : word;
+  var g1       : PDeQueue;
       t,i,k    : word;
       ic1, ic2 : word;
       kc1, kc2 : word;
@@ -337,21 +390,31 @@ procedure kargerStein(graph      : PDeQueue;
     if graph^.size < 6 then begin
       g1 := copyGraph(graph);
       contract(g1,2);
+      (* write(' ',PNode(g1^.at(0))^.edges_^.size); *)
       minCut := PNode(g1^.at(0))^.edges_^.size;
       c1 := PNode(g1^.at(0))^.weight_;
-      c2 := PNode(g1^.at(0))^.weight_;
+      c2 := PNode(g1^.at(1))^.weight_;
       g1^.dispose;
+      p.step(1);
     end else begin
-      t := round(1 + graph^.size / sqrt(2));
+
+      t := round(1 + graph^.size / sqrt(2)); (* sqrt(2) *)
       g1 := copyGraph(graph);
       contract(g1,t);
-      i := minCut(g1,ic1, ic2);
+      i := minCut(g1,ic1, ic2,p);
       g1^.dispose;
 
-      g2 := copyGraph(graph);
-      contract(g2,t);
-      k := minCut(g2,kc1,kc2);
-      g2^.dispose;
+      if i = 3 then begin
+        minCut := i;
+        c1 := ic1;
+        c2 := ic2;
+        exit;
+      end;
+
+      g1 := copyGraph(graph);
+      contract(g1,t);
+      k := minCut(g1,kc1,kc2,p);
+      g1^.dispose;
 
       if i < k then begin
         minCut := i;
@@ -364,26 +427,26 @@ procedure kargerStein(graph      : PDeQueue;
       end;
     end;
   end;
-
+var p : TProgressBar;
 begin
- cut := minCut(graph,c1,c2);
+ p.init(round(exp(ln(2)*(ln(graph^.size)/ln(sqrt(2))))),'minC');
+ cut := minCut(graph,c1,c2, p);
+ p.done;
 end;
 
 
 function part1(var input: Text) : longint;
 var graph       : PDeQueue;
     c1, c2, cut : word;
-             it : PDeQueueIterator;
-             i  : Integer;
 begin
   randSeed := 1234;
   c1 := 0;
   c2 := 0;
-  i  := 1;
 
   buildGraph(input, graph);
   kargerStein(graph, cut, c1, c2);
 
+  writeln('MinCut is: ',cut);
   assert(cut = 3, 'MinCut is not correct');
   graph^.dispose;
   part1 := c1 * c2;
@@ -392,6 +455,7 @@ end;
 var input : Text;
        p1 : longint;
 begin
+  clrscr;
   assign(input, InputFileName);
   reset(input);
 
