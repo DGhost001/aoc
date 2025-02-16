@@ -218,8 +218,10 @@ begin
             self.popFront
         else if item = self.last_ then
             self.popBack
-        else
+        else begin
             SYSTEM.dispose(item, done);
+            dec(self.length_);
+        end;
     end;
 end;
 
