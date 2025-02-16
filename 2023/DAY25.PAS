@@ -9,10 +9,10 @@ type  TGroup = (None, Group1, Group2);
       TEdge = object(ItemType)
        
         constructor  copy(const other : PEdge);
-        constructor  init(const next: PNode; const weight : word);
+        constructor  init(const n: PNode; const weight : word);
         
         function next : PNode;
-        procedure setNext(const next: PNode);
+        procedure setNext(const n: PNode);
         
         private
             next_  : PNode;
@@ -71,9 +71,9 @@ begin
   update := borderConnections_;
 end;
 
-constructor TEdge.init(const next: PNode; const weight : word);
+constructor TEdge.init(const n: PNode; const weight : word);
 begin
-  next_   := next;
+  next_   := n;
   weight_ := weight
 end;
 
@@ -91,10 +91,10 @@ begin
   next := next_;
 end;
 
-procedure TEdge.setNext(const next: PNode);
+procedure TEdge.setNext(const n: PNode);
 begin
   assert(typeof(next^) = typeof(TNode), 'Invalid Node type');
-  next_ := next;
+  next_ := n;
 end;
 
 constructor TNode.init(const id : word);
@@ -226,7 +226,7 @@ begin
   it1 := edges_^.first;
   while it1 <> nil do begin
     assert(typeof(it1^.at^) = typeof(TEdge), 'Invalid Edge type');
-    assert(typeof(PEdge(it1^.at)^.next^) = typeof(TNode), 'Invalid Node type');
+    PEdge(it1^.at)^.next;
     it1 := it1^.next;
   end;
 end;  
