@@ -2,14 +2,14 @@ program day25;
 (* This is the implementation for day 25 of the AOC 2023 *)
 uses ItemHandler,cassert, dequeue, JString, ProgressBar, utils, sort;
 
-const InputFileName = 'INP/DAY25_IN.TXT';
+const InputFileName = 'INP/DAY25_TE.TXT';
 type  TGroup = (None, Group1, Group2);
       PNode = ^TNode;
       PEdge = ^TEdge;
       TEdge = object(ItemType)
         next_  : PNode;
         weight_: word;
-
+        constructor  copy(const other : PEdge);
         constructor  init(const next: PNode; const weight : word);
       end;
 
@@ -17,11 +17,14 @@ type  TGroup = (None, Group1, Group2);
         edges_    : PDeQueue;
         id_       : word;
         group_    : TGroup;
+        weight_   : word;
 
-        constructor init(id : word);
+        constructor init(const id   : word);
+        constructor copy(const other: PNode);
         destructor done; virtual;
 
         procedure   addEdge(node : PNode; const weight : word);
+        procedure   merge(const node : PNode);
         function    majorNeighbourGroup : TGroup;
         function    isBorderNode : boolean;
         function    numBorderConnections : word;
@@ -33,12 +36,12 @@ type  TGroup = (None, Group1, Group2);
         node_              : PNode;
         borderConnections_ : word;
 
-        constructor init(node : PNode);
+        constructor init(const node : PNode);
         function compare(other:PItemType):TRelation; virtual;
         function update : word;
       end;
 
-constructor TNodeBackLog.init(node: PNode);
+constructor TNodeBackLog.init(const node: PNode);
 begin
   node_ := node;
   borderConnections_ := node^.numBorderConnections;
@@ -67,11 +70,34 @@ begin
   weight_ := weight
 end;
 
-constructor TNode.init(id : word);
+constructor TEdge.copy(const other: PEdge);
+begin
+  next_ := other^.next_;
+  weight_ := other^.weight_;
+end;
+
+constructor TNode.init(const id : word);
 begin
   id_    := id;
   edges_ := new(PDeQueue, init);
   group_ := None;
+  weight_:= 1;
+end;
+
+constructor TNode.copy(const other : PNode);
+var it : PDeQueueIterator;
+begin
+  id_ := other^.id_;
+
+  edges_ := new(PDeQueue, init);
+  it := other^.edges_^.first;
+  while it <> nil do begin
+   edges_^.pushBack(new(PEdge,copy(PEdge(it^.at))));
+   it := it^.next;
+  end;
+
+  group_ := other^.group_;
+  weight_:= other^.weight_;
 end;
 
 destructor TNode.done;
@@ -82,6 +108,31 @@ end;
 procedure TNode.addEdge(node : PNode; const weight : word);
 begin
   edges_^.pushBack(new(PEdge, init(node, weight)));
+end;
+
+procedure TNode.merge(const node : PNode);
+var it1, it2   : PDeQueueIterator;
+    edge, edge2: PEdge;
+begin
+  it1 := node^.edges_^.first;
+  while it1 <> nil do begin
+   edge := PEdge(it1^.at);
+   if edge^.next_ <> @self then begin
+     edge := new(PEdge,copy(edge));
+     it2 := edge^.next_^.edges_^.first;
+
+     (* Go through the remote edges and clean reverse references *)
+     while it2 <> nil do begin
+       edge2 := PEdge(it2^.at);
+       if edge2^.next_ = node then edge2^.next_ := @self;
+       it2 := it2^.next;
+     end;
+
+     edges_^.pushBack(edge);
+   end;
+   it1 := it1^.next;
+  end;
+  inc(weight_, node^.weight_);
 end;
 
 function TNode.majorNeighbourGroup : TGroup;
@@ -134,6 +185,32 @@ begin
   if group_ = Group2 then group_ := Group1;
 end;
 
+function findNode(graph: PDeQueue; const id : word) : PNode;
+ var result : PNode;
+         it : PDeQueueIterator;
+begin
+  it := graph^.first;
+  while (it <> nil) and (PNode(it^.at)^.id_ <> id) do
+    it := it^.next;
+  if it <> nil then
+    result := PNode(it^.at)
+  else begin
+    result := new(PNode, init(id));
+    graph^.pushBack(result);
+  end;
+  findNode := result;
+end;
+
+procedure addEdge(graph: PDequeue; node : PNode; id : word);
+ var other : PNode;
+ begin
+  other := findNode(graph, id);
+
+  (* Undirected graph, so we need to add two edges ... *)
+  node^.addEdge(other,1);
+  other^.addEdge(node, 1);
+end;
+
 procedure buildGraph(var input:Text; var graph : PDeQueue);
  function getNodeId(const node : PJString) : word;
  var it     : PJStringIterator;
@@ -151,32 +228,6 @@ procedure buildGraph(var input:Text; var graph : PDeQueue);
    getNodeId := result;
  end;
 
- function findNode(graph: PDeQueue; const id : word) : PNode;
- var result : PNode;
-         it : PDeQueueIterator;
- begin
-   it := graph^.first;
-   while (it <> nil) and (PNode(it^.at)^.id_ <> id) do
-     it := it^.next;
-   if it <> nil then
-     result := PNode(it^.at)
-   else begin
-     result := new(PNode, init(id));
-     graph^.pushBack(result);
-   end;
-
-   findNode := result;
- end;
-
- procedure addEdge(graph: PDequeue; node : PNode; id : word);
- var other : PNode;
- begin
-   other := findNode(graph, id);
-
-   (* Undirected graph, so we need to add two edges ... *)
-   node^.addEdge(other,1);
-   other^.addEdge(node, 1);
- end;
 var  line  : PJString;
     sline  : PJString;
      tokens: PDeQueue;
@@ -214,187 +265,126 @@ begin
   p.done;
 end;
 
-procedure colorGraph(graph : PDeQueue; startNode: Integer);
-var queue : PDeQueue;
-    it    : PDeQueueIterator;
-    n1, n2: PNode;
-    i     : integer;
-    p     : TProgressBar;
+function copyGraph(const graph:PDeQueue) : PDeQueue;
+var result   : PDeQueue;
+    it1, it2 : PDeQueueIterator;
+    n1 , n2  : PNode;
+         edge: PEdge;
 begin
-  (* Reset all nodes to None *)
-  it := graph^.first;
-  while it <> nil do begin
-    PNode(it^.at)^.group_ := None;
-    it := it^.next;
-  end;
+  result := new(PDeQueue,init);
+  it1 := graph^.first;
 
-  queue := new(PDeQueue,init);
-  repeat
-    n1 := PNode(graph^.at(random(graph^.size)));
-    n2 := PNode(graph^.at(random(graph^.size))); 
-  until n1 <> n2;
-  
-  n1^.group_ := Group1;
-  n2^.group_ := Group2;
-
-  it := n1^.edges_^.first;
-  while it <> nil do begin
-    queue^.pushBack(new(PNodeBackLog,init(PEdge(it^.at)^.next_)));
-    it := it^.next;
-  end;
-
-  it := n2^.edges_^.first;
-  while it <> nil do begin
-    queue^.pushBack(new(PNodeBackLog,init(PEdge(it^.at)^.next_)));
-    it := it^.next;
-  end;
-  p.init(graph^.size,'color');
-  while queue^.size > 0 do begin
-    n1 := PNodeBackLog(queue^.front)^.node_;
-
-    if n1^.group_ = None then begin
-      it := n1^.edges_^.first;
-      i  := 0;
-      while it <> nil do begin
-        if PEdge(it^.at)^.next_^.group_ = Group1 then inc(i) else
-        if PEdge(it^.at)^.next_^.group_ = Group2 then dec(i) else
-        queue^.pushBack(new(PNodeBackLog,init(PEdge(it^.at)^.next_)));
-        it := it^.next;
-      end;
-      if i >=0 then n1^.group_ := Group1 else n1^.group_ := Group2;
-      p.step(1);
-    end;
-    queue^.popFront;
-  end;
-  p.done;
-  queue^.dispose;
-end;
-
-function minimizeBorder(graph : PDeQueue): boolean;
-
- function findBorder(graph : PDeQueue; var border: PDeQueue): word;
- var result : word;
-          b : PNodeBackLog;
-         it : PDeQueueIterator;
-          n : PNode;
- begin
-   border := new(PDeQueue, init);
-   it := graph^.first;
-   result := 0;
-
-   while it <> nil do begin
-     n := PNode(it^.at);
-     if n^.isBorderNode then begin
-       b := new(PNodeBackLog,init(n));
-       inc(result, b^.borderConnections_);
-       border^.pushBack(b);
-     end;
-     it := it^.next;
-   end;
-
-   sortQueue(border);
-   findBorder := result;
- end;
-
- function getBorderLength(const border: PDeQueue): word;
- var result : word;
-         it : PDeQueueIterator;
- begin
-   result := 0;
-   it := border^.first;
-   while it <> NIL do begin
-      inc(result, PNodeBackLog(it^.at)^.update);
-      it := it^.next;
-   end;
-   getBorderLength := result;
- end;
-
- function findNode(border: PDeQueue; n : PNode) : PDeQueueIterator;
- var it : PDeQueueIterator;
- begin
-   it := border^.first;
-   while (it <> nil) and
-         (PNodeBackLog(it^.at)^.node_ <> n) do it := it^.next;
-   findNode := it;
- end;
-
- procedure setGroup(node: PNode; border: PDeQueue; group: TGroup);
- var it1, it2 : PDeQueueIterator;
-          n2  : PNode;
- begin
-  node^.group_ := group;
-  it1 := node^.edges_^.first;
-
+  (* Copy all nodes first *)
   while it1 <> nil do begin
-      n2 := PEdge(it1^.at)^.next_;
-      it2 := findNode(border,n2);
-      
-      if (it2 <> nil) and (not n2^.isBorderNode) then
-        border^.remove(it2)
-      else if (it2 = nil) and (n2^.isBorderNode) then
-        border^.pushBack(new(PNodeBackLog,init(n2)));
-      it1 := it1^.next;
+    n1 := PNode(it1^.at);
+    result^.pushBack(new(PNode, copy(n1)));
+    it1 := it1^.next;
   end;
-  sortQueue(border);   
- end;
- 
- 
- function swapNode(node : PNode; border : PDeQueue) : boolean;
- var g   : TGroup;
- begin
-   g := node^.majorNeighbourGroup;
-   swapNode := g <> node^.group_;
-   if g <> node^.group_ then begin
-      setGroup(node, border, g);
-   end;
- end;
 
-var border: PDeQueue;
-        it: PDeQueueIterator;
-         n: PNode;
+  (* Now adjust the edges to point to the new graph *)
+  it1 := result^.first;
+  while it1 <> nil do begin
+    n2 := PNode(it1^.at);
+    it2 := n2^.edges_^.first;
+    while it2 <> nil do begin
+      edge := PEdge(it2^.at);
+      edge^.next_ := findNode(result, edge^.next_^.id_);
+      it2 := it2^.next;
+    end;
+
+    it1 := it1^.next;
+  end;
+
+  copyGraph := result;
+end;
+
+procedure mergeNodesInGraph(graph   : PDeQueue;
+                            node1   : PNode;
+                            node2   : PNode);
+var it : PDeQueueIterator;
 begin
-  findBorder(graph, border);
-  while getBorderLength(border) <> 3 do begin
-    it := border^.last;
-    while (it <> nil) and (not swapNode(PNodeBackLog(it^.at)^.node_, border)) do
-      it := it^.prev;
-    
-    (* If we cannot find a node to swap, we swap the first one and see if it helps *)
-    if it = nil then begin
-      WriteLn('Border length: ',getBorderLength(border),' ');
-      minimizeBorder := False;
-      exit;
+  node1^.merge(node2); (* Merge the two nodes *)
+
+  it := graph^.first;
+  while (it <> nil) and (PNode(it^.at) <> node2) do
+   it := it^.next;
+  assert(it <> nil, 'Node not found!');
+  graph^.remove(it);
+end;
+
+procedure kargerStein(graph      : PDeQueue;
+                     var cut    : word;
+                     var c1, c2 : word
+                     );
+
+  procedure contract( graph : PDeQueue; threshold : word);
+  var n1, n2 : PNode;
+  begin
+    while graph^.size > threshold do begin
+      (* Find a random edge from the graph *)
+      n1 := PNode(graph^.at(random(graph^.size)));
+      n2 := PEdge(n1^.edges_^.at(random(n1^.edges_^.size)))^.next_;
+      mergeNodesInGraph(graph, n1,n2); (* Collaps the edge *)
     end;
   end;
-  WriteLn('Border length: ',getBorderLength(border),' ');
-  minimizeBorder := True;
-  border^.dispose;
+
+  function minCut(graph : PDeQueue; var c1, c2 : word) : word;
+  var g1, g2   : PDeQueue;
+      t,i,k    : word;
+      ic1, ic2 : word;
+      kc1, kc2 : word;
+  begin
+    if graph^.size < 6 then begin
+      g1 := copyGraph(graph);
+      contract(g1,2);
+      minCut := PNode(g1^.at(0))^.edges_^.size;
+      c1 := PNode(g1^.at(0))^.weight_;
+      c2 := PNode(g1^.at(0))^.weight_;
+      g1^.dispose;
+    end else begin
+      t := round(1 + graph^.size / sqrt(2));
+      g1 := copyGraph(graph);
+      contract(g1,t);
+      i := minCut(g1,ic1, ic2);
+      g1^.dispose;
+
+      g2 := copyGraph(graph);
+      contract(g2,t);
+      k := minCut(g2,kc1,kc2);
+      g2^.dispose;
+
+      if i < k then begin
+        minCut := i;
+        c1 := ic1;
+        c2 := ic2;
+      end else begin
+        minCut := k;
+        c1 := kc1;
+        c2 := kc2;
+      end;
+    end;
+  end;
+
+begin
+ cut := minCut(graph,c1,c2);
 end;
+
 
 function part1(var input: Text) : longint;
-var graph  : PDeQueue;
-    c1, c2 : LongInt;
-        it : PDeQueueIterator;
-        i  : Integer;
+var graph       : PDeQueue;
+    c1, c2, cut : word;
+             it : PDeQueueIterator;
+             i  : Integer;
 begin
+  randSeed := 1234;
   c1 := 0;
   c2 := 0;
   i  := 1;
-  
+
   buildGraph(input, graph);
-  
-  repeat
-    colorGraph(graph,i);
-    inc(i);
-  until minimizeBorder(graph) or (i >= graph^.size);
+  kargerStein(graph, cut, c1, c2);
 
-  it := graph^.first;
-  while it <> nil do begin
-    if PNode(it^.at)^.group_ = Group1 then inc(c1) else
-    if PNode(it^.at)^.group_ = Group2 then inc(c2);
-    it := it^.next;
-  end;
-
+  assert(cut = 3, 'MinCut is not correct');
   graph^.dispose;
   part1 := c1 * c2;
 end;
