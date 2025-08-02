@@ -30,21 +30,21 @@ interface
 
     procedure sub32(var a,b: Uint32_t);
 
-    procedure mul64(var a,b: Uint64_t);                   (* a:= a * b *)
+    procedure mul64(var a: Uint64_t; const b: Uint64_t);                   (* a:= a * b *)
     procedure mul64LongInt(var a: Uint64_t; const b: longint);
 
     procedure div64(var a, b, r : Uint64_t);              (* a:= a div b, r:= a mod b *)
 
-    function isNull64(var a: Uint64_t): boolean;          (* a == 0 *)
+    function isNull64(const a: Uint64_t): boolean;          (* a == 0 *)
     function isNull32(var a: Uint32_t): boolean;
 
-    function isGreater64(var a,b: Uint64_t): boolean;     (* a > b  *)
+    function isGreater64(const a,b: Uint64_t): boolean;     (* a > b  *)
     function isGreater32(var a,b: Uint32_t): boolean;
 
-    function isLess64(var a,b: Uint64_t):boolean;         (* a < b  *)
+    function isLess64(const a,b: Uint64_t):boolean;         (* a < b  *)
     function isLess32(var a,b: Uint32_t): boolean;
 
-    function isEqual64(var a,b: Uint64_t): boolean;       (* a == b *)
+    function isEqual64(const a,b: Uint64_t): boolean;       (* a == b *)
     function isEqual32(var a,b: Uint32_t): boolean;
 
     procedure fromLongInt64(i : LongInt; var a: Uint64_t);
@@ -62,7 +62,11 @@ interface
     procedure uint64FromComp(const a: comp; var b: Uint64_t);
     function uint64ToComp(var b: Uint64_t) : comp;
 
+    function ilog10(const a : Uint64_t) : integer;
+    procedure pow10(const n : integer; var a : uint64_t);
+
 implementation
+uses cassert;
 
 {$IFNDEF FPC}
 procedure shiftLeft64; assembler;
@@ -355,7 +359,7 @@ end;
 
 
 
-function isNull64(var a: Uint64_t): boolean; assembler; (* a == 0 *)
+function isNull64(const a: Uint64_t): boolean; assembler; (* a == 0 *)
 asm
     push ds
 
@@ -594,7 +598,7 @@ begin
    halt(-1); (*Not implemented yet...*)
 end;
 
-function isNull64(var a: Uint64_t): boolean;          (* a == 0 *)
+function isNull64(const a: Uint64_t): boolean;          (* a == 0 *)
 begin
   isNull64 := (a[0] = 0) and (a[1] = 0) and (a[2] = 0) and (a[3] = 0) and
               (a[4] = 0) and (a[5] = 0) and (a[6] = 0) and (a[7] = 0);
@@ -612,7 +616,7 @@ begin
    halt(-1); (*Not implemented yet...*)
 end;
 
-function isEqual64(var a,b: Uint64_t): boolean;       (* a == b *)
+function isEqual64(const a,b: Uint64_t): boolean;       (* a == b *)
 begin
   isEqual64 := (a[0] = b[0]) and (a[1] = b[1]) and (a[2] = b[2]) and (a[3] = b[3]) and
                (a[4] = b[4]) and (a[5] = b[5]) and (a[6] = b[6]) and (a[7] = b[7]);
@@ -628,7 +632,7 @@ begin
 end;
 {$ENDIF}
 
-function isGreater64(var a,b: Uint64_t): boolean;     (* a > b  *)
+function isGreater64(const a,b: Uint64_t): boolean;     (* a > b  *)
 var result: boolean;
        pos: integer;
 begin
@@ -657,8 +661,79 @@ begin
     add64(result, tmp);
   end;
 end;
+{$IFNDEF FPC}
+procedure mul64(var a:uint64_t; const b : uint64_t);
+procedure mulx16(var   a: uint64_t;
+                 const b: word);
+(*This sub function is required, as there is no i32 = i16*i16 multiplication*)
+function imul(const a,b : word) : longint; assembler;
+asm
+  mov ax, [a]
+  mov dx, [b]
+  mul dx
+end;
 
-procedure mul64(var a,b: Uint64_t);
+var m      : longint;
+    result : uint64_t;
+    tmp    : uint64_t;
+    a1     : array[0..3] of word absolute a;
+    t1     : array[0..3] of word absolute tmp;
+    m1     : array[0..1] of word absolute m;
+begin
+   result := zero64;
+   tmp    := zero64;
+
+   m := imul(a1[0], b);
+   t1[0] := m1[0];
+   t1[1] := m1[1];
+   add64(result, tmp);
+   t1[0] := 0;
+
+   m := imul(a1[1], b);
+   t1[1] := m1[0];
+   t1[2] := m1[1];
+   add64(result, tmp);
+   t1[1] := 0;
+
+   m := imul(a1[2], b);
+   t1[2] := m1[0];
+   t1[3] := m1[1];
+   add64(result, tmp);
+   t1[2] := 0;
+
+   m := imul(a1[3], b);
+   t1[3] := m1[0];
+   add64(result, tmp);
+
+   a:= result;
+end;
+var tmp    : uint64_t;
+    result : uint64_t;
+    b1     : array[0..3] of word absolute b;
+    t1     : array[0..3] of word absolute tmp;
+begin
+  result := a;
+  mulx16(result, b1[0]);
+
+  tmp := a;
+  mulx16(tmp, b1[1]);
+  t1[3] := t1[2]; t1[2] := t1[1]; t1[1] := t1[0]; t1[0] := 0;
+  add64(result, tmp);
+
+  tmp := a;
+  mulx16(tmp, b1[2]);
+  t1[3] := t1[1]; t1[2] := t1[0]; t1[1] := 0; t1[0] := 0;
+  add64(result, tmp);
+
+  tmp := a;
+  mulx16(tmp, b1[3]);
+  t1[3] := t1[0]; t1[2] := 0; t1[1] := 0; t1[0] := 0;
+  add64(result, tmp);
+
+  a:= result;
+end;
+{$ELSE}
+procedure mul64(var a :Uint64_t; const b: Uint64_t);
 var i,j    : integer;
     result : Uint64_t;
     tmp    : Uint64_t;
@@ -674,7 +749,7 @@ begin
   end;
   a:= result;
 end;
-
+{$ENDIF}
 procedure divmnu(var q,r: uint64_t; u, v : uint64_t);
 
   (* Helper to get the number of leeding zeros *)
@@ -975,6 +1050,47 @@ begin
   if isGreater64(a,b) then c:= a else c:= b;
 end;
 
+{$IFDEF ATARI}
+
+(*
+ *  The ATARI ST has a Motorola 68k and is therefor a big endian system.
+ *  Our uint64_t is little endian, so we need to swap the byte order
+ *  when converting from/to comp.
+ *)
+
+procedure swapByteOrder(var a: Uint64_t);
+  procedure swap(var a, b: byte);
+  var tmp : byte;
+  begin
+    tmp := a;
+    a   := b;
+    b   := tmp;
+  end;
+begin
+  Swap(a[0], a[7]);
+  Swap(a[1], a[6]);
+  Swap(a[2], a[5]);
+  Swap(a[3], a[4]);
+end;
+
+procedure uint64FromComp(const a: comp; var b: Uint64_t);
+type PUint64_t = ^Uint64_t;
+begin
+ b := PUint64_t(@a)^;
+ swapByteOrder(b);
+end;
+
+function uint64ToComp(var b: Uint64_t) : comp;
+type PComp = ^Comp;
+var tmp: Uint64_t;
+begin
+  tmp := b;
+  swapByteOrder(tmp);
+  uint64ToComp := PComp(@tmp)^;
+end;
+
+{$ELSE}
+
 procedure uint64FromComp(const a: comp; var b: Uint64_t);
 type PUint64_t = ^Uint64_t;
 begin
@@ -986,6 +1102,8 @@ type PComp = ^Comp;
 begin
   uint64ToComp := PComp(@b)^;
 end;
+
+{$ENDIF}
 
 procedure add64LongInt(var a: Uint64_t; const b: longint);
 var t : Uint64_t;
@@ -1006,6 +1124,60 @@ var t: Uint64_t;
 begin
   fromLongInt64(b,t);
   mul64(a,t);
+end;
+
+const LogMap : array[0..19] of Uint64_t = (
+      (001, 000, 000, 000, 000, 000, 000, 000),
+      (010, 000, 000, 000, 000, 000, 000, 000),
+      (100, 000, 000, 000, 000, 000, 000, 000),
+      (232, 003, 000, 000, 000, 000, 000, 000),
+      (016, 039, 000, 000, 000, 000, 000, 000),
+      (160, 134, 001, 000, 000, 000, 000, 000),
+      (064, 066, 015, 000, 000, 000, 000, 000),
+      (128, 150, 152, 000, 000, 000, 000, 000),
+      (000, 225, 245, 005, 000, 000, 000, 000),
+      (000, 202, 154, 059, 000, 000, 000, 000),
+      (000, 228, 011, 084, 002, 000, 000, 000),
+      (000, 232, 118, 072, 023, 000, 000, 000),
+      (000, 016, 165, 212, 232, 000, 000, 000),
+      (000, 160, 114, 078, 024, 009, 000, 000),
+      (000, 064, 122, 016, 243, 090, 000, 000),
+      (000, 128, 198, 164, 126, 141, 003, 000),
+      (000, 000, 193, 111, 242, 134, 035, 000),
+      (000, 000, 138, 093, 120, 069, 099, 001),
+      (000, 000, 100, 167, 179, 182, 224, 013),
+      (000, 000, 232, 137, 004, 035, 199, 138)
+      );
+
+function ilog10(const a: Uint64_t) : integer;
+var lower, upper, middle : byte;
+begin
+  if isNull64(a) then ilog10 := -1 else begin
+    lower := 0;
+    upper := HIGH(LogMap);
+    middle := (lower + upper) div 2;
+
+    while lower < upper do begin
+      if isGreater64(LogMap[middle], a) then begin
+        upper := middle - 1;
+      end else if isLess64(LogMap[middle],a) then begin
+        lower := middle + 1;
+      end else begin
+        lower := middle;
+        upper := middle;
+      end;
+      middle := (lower + upper) div 2;
+    end;
+    if isGreater64(LogMap[middle], a) then ilog10 := middle - 1 else
+    ilog10 := middle;
+  end;
+end;
+
+procedure pow10(const n : integer; var a : uint64_t);
+begin
+  assert(n >= 0, 'Negative Power not supported');
+  assert(n <= HIGH(LogMap), 'Number overflow');
+  a := LogMap[n];
 end;
 
 begin

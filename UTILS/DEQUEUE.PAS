@@ -40,6 +40,8 @@ uses ItemHandler, ProgressBar;
             procedure popBack;
             procedure popFront;
             procedure remove(item: PDeQueueIterator);
+            procedure insertBefore(item:PItemType; it : PDeQueueIterator);
+            procedure insertAfter(item:PItemType; it : PDeQueueIterator);
 
             function  front: PItemType;
             function  back: PItemType;
@@ -60,6 +62,8 @@ uses ItemHandler, ProgressBar;
                 length_: word;
         end;
 implementation
+
+uses cassert;
 
 constructor TDeQueueIterator.init;
 begin
@@ -214,7 +218,7 @@ end;
 procedure TDeQueue.remove;
 begin
     if item <> NIL then begin
-        if item = self.first_ then 
+        if item = self.first_ then
             self.popFront
         else if item = self.last_ then
             self.popBack
@@ -225,9 +229,33 @@ begin
     end;
 end;
 
+procedure TDeQueue.insertBefore(item:PItemType; it : PDeQueueIterator);
+var it2 : PDeQueueIterator;
+begin
+  assert(it <> nil, 'Invalid iterator supplied');
+
+  it2 := new(PDequeueIterator,insertBefore(item,it));
+  if self.first_ = it then self.first_ := it2;
+
+  inc(self.length_);
+end;
+
+procedure TDeQueue.insertAfter(item:PItemType; it : PDeQueueIterator);
+var it2 : PDeQueueIterator;
+begin
+  assert(it <> nil, 'Invalid iterator supplied');
+
+  it2 := new(PDequeueIterator,insertAfter(item,it));
+  if self.last_ = it then self.last_ := it2;
+
+  inc(self.length_);
+end;
+
+
+
 function  TDeQueue.front: PItemType;
 begin
-    if self.first_ <> NIL then 
+    if self.first_ <> NIL then
         front:= self.first_^.at
     else
         front:= NIL

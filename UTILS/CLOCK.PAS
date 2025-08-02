@@ -5,9 +5,51 @@ type TClock = comp; (* The only availble 64bit data type*)
 
 function now : TClock; (*Return a unix timestamp*)
 procedure toHMS(var h,m,s : word; time: TClock);
+function getTickCount : longint;
+
 implementation
 
+{$IFDEF ATARI}
+
+(**
+ * TOS specific code to get the tick count.
+ * This uses the GEMDOS super mode to read the BIOS tick count.
+ *)
+
+uses gemdos, stdint, dos;
+
+function getTickCount: longint;
+var biosTickCount: longint absolute $04ba;  (* 200Hz counter value *)
+    result: longint;
+    oldStack: Pointer; 
+begin
+  oldStack := Pointer(gemdos_super(nil));
+  result := biosTickCount; (* Read the 200Hz counter in super mode *)
+  gemdos_super(oldStack);
+  getTickCount := result;
+end;
+
+{$ELSE}
 uses dos, stdint;
+(**
+ * DOS specific code to get the tick count.
+ * This uses the BIOS tick count stored at $40:$6C.
+ *)
+function getTickCount : longint;
+var biosTicks : longint absolute $40:$6c;
+begin
+  asm
+   cli
+  end;
+
+  getTickCount := biosTicks;
+
+  asm
+   sti
+  end;
+end;
+
+{$ENDIF}
 
 function gregorianToJulian(year, month, day : longint): longint;
 const D0 : longint =    1461;
@@ -32,8 +74,14 @@ var   julian: TClock;
       time  : TClock;
 begin
  julian := gregorianToJulian(year, month, day) - c1970;
+ {$ifdef ATARI}
+ time   := comp(hour) * 3600 + comp(minute) * 60 + comp(second);
+ universalToEpoch := comp(julian) * 86400 + time;
+ {$ELSE}
  time   := hour * 3600.0 + minute * 60.0 + second;
  universalToEpoch := julian * 86400.0 + time;
+ {$ENDIF}
+ 
 end;
 
 function now;
