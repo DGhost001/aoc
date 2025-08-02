@@ -1,0 +1,3 @@
+# Keep the CRLF always ... as this is DOS / ATARI Code which needs the CRLF
+# line Endings
+* text eol=crlf
