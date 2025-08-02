@@ -165,5 +165,5 @@ begin
 end;
 
 begin
-  runAoc(InputFileName, 14, part1, part2);
+  runAoc(InputFileName, 14, part1, part2, nil, nil);
 end.

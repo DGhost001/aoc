@@ -15,6 +15,7 @@ interface
     
   procedure clrscr;
   procedure TextColor (Color: byte);
+  procedure gotoxy(x, y: byte);
   procedure delay (ms: word); 
   function keypressed: boolean;
   function readkey: char;
@@ -41,6 +42,14 @@ begin
         7: gemdos_cconws('\7');  // White
     else gemdos_cconws('\7'); // Default to White for invalid color
     end;
+end;
+
+procedure gotoxy(x, y: byte);
+var s:string;
+begin
+  s:= '\33Y' + chr(y + 32) + chr(x + 32); (* Move cursor to (x,y) *)
+  s:= s + chr(0); (* Null-terminate the string *)
+  gemdos_cconws(@s[1]);
 end;
 
 function keypressed: boolean;

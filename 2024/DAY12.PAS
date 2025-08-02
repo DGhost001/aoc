@@ -217,6 +217,6 @@ end;
 
 begin
   segments := new(PSegmentList);
-  runAoc(InputFileName, 12, part1, part2);
+  runAoc(InputFileName, 12, part1, part2, nil, nil);
   dispose(segments);
 end.

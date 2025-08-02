@@ -88,5 +88,5 @@ begin
 end;
 var n : Uint64_t;
 begin
-  runAoc(InputFileName, 7, part1, part2);
+  runAoc(InputFileName, 7, part1, part2, nil, nil);
 end.

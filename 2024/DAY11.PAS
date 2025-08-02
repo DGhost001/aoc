@@ -126,5 +126,5 @@ end;
 
 begin
   preFillCache;
-  runAoc(InputFileName, 11, part1, part2);
+  runAoc(InputFileName, 11, part1, part2, nil, nil);
 end.

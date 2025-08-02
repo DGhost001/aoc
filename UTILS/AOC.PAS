@@ -1,12 +1,16 @@
 unit aoc;
 
 interface
-type FAocFunction = function (var input : Text) : comp;
+type
+  FAocFunction = function (var input : Text) : comp;
+  FAocSetupTeardown = procedure(var input : Text);
 
-     procedure runAoc(const fileName : string;
-                      const day      : word;
-                      part1 : FAocFunction;
-                      part2 : FAocFunction);
+procedure runAoc(const fileName : string;
+         const day      : word;
+         part1 : FAocFunction;
+         part2 : FAocFunction;
+         setup : FAocSetupTeardown;
+         tearDown : FAocSetupTeardown);
 implementation
 
 {$IFDEF ATARI}
@@ -16,9 +20,11 @@ uses crt;
 {$ENDIF}
 
 procedure runAoc(const fileName : string;
-                      const day      : word;
-                      part1 : FAocFunction;
-                      part2 : FAocFunction);
+                 const day      : word;
+                 part1 : FAocFunction;
+                 part2 : FAocFunction;
+                 setup : FAocSetupTeardown;
+                 tearDown : FAocSetupTeardown);
 var input : Text;
     result: comp;
 begin
@@ -28,8 +34,14 @@ begin
   clrscr;
   {$ENDIF}
   assign(input, fileName);
-
+  
   writeln('Starting Day ',day:2, '...');
+
+  if @setup<>Nil then begin
+    reset(input);
+    setup(input);
+  end;
+  
   if @part1 <> NIL then begin
     reset(input);
     result := part1(input);
@@ -48,6 +60,11 @@ begin
     {$ELSE}
     writeln('Answer to Part 2 is: ', result:1:0);
     {$ENDIF}
+  end;
+  
+  if @tearDown <> NIL then begin
+    reset(input);
+    tearDown(input);
   end;
 
   close(input);

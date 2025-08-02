@@ -20,6 +20,10 @@ begin
     textColor(lightGray);
     writeln('"');
     writeln('Aborting...');
+    {$IFDEF ATARI}
+    WriteLn('---=== Press Return to exit... ===---');
+    ReadLn;
+    {$ENDIF}
     runError(300);
   end;
 end;

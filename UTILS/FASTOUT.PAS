@@ -4,6 +4,7 @@ interface
   procedure fastwrite(col,row,attrib:byte;str:string);
 implementation
 
+{$IFNDEF ATARI}
 procedure fastwrite(col,row,attrib:byte;str:string);
 begin
   inline
@@ -15,6 +16,12 @@ begin
      $89/$1D/$47/$47/$E2/$Ea/$2A/$C0/$74/$10/$BA/$00/$B0/
      $8E/$DA/$46/$8a/$9A/str/$89/$1D/$47/$47/$E2/$F5/$1F);
 end;
-
+{$ELSE}
+uses app;
+procedure fastwrite(col,row,attrib:byte;str:string);
+begin
+  putText(col*8,row*16,str);
+end;
+{$ENDIF}
 begin
 end.
