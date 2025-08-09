@@ -13,6 +13,7 @@ interface
 
 
     procedure shiftLeft64(count: byte; var a: Uint64_t);
+    procedure shiftRight64(count: byte; var a: Uint64_t); (* a := a shr count *)
 
     procedure rotateLeft64(count: byte; var a: Uint64_t); (* a:= a rol c *)
     procedure rotateLeft32(count: byte; var a: Uint32_t);
@@ -83,6 +84,18 @@ asm
   loop @1
 end;
 
+procedure shiftRight64; assembler;
+asm
+  les di, [a]
+  xor cx, cx
+  mov cl, count
+  @1:  
+    sar WORD [es: di + 6],1
+    rcr WORD [es: di + 4],1
+    rcr WORD [es: di + 2],1
+    rcr WORD [es: di + 0],1
+  loop @1
+end;
 
 procedure rotateLeft64; assembler;
 asm
