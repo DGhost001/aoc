@@ -6,7 +6,7 @@ const InputFileName = 'INP\DAY16_IN.TXT';
       MaxMapSize    = 140;
       MaxNodes      = 1024*2;
 const minPos : TPos = (x: 0; y: 0);
-      
+
 type  PMap      = ^TMap;
       TMap      = array[0..MaxMapSize,0..MaxMapSize] of char;
       
@@ -16,13 +16,25 @@ type  PMap      = ^TMap;
          turns_ : word;
          next_  : PNode; (* next node in the direction of the edge *)
          entry_ : TDirection; (* entry direction of the edge *)
+         taken_ : boolean; (* true if the edge has been taken *)
       end;
+
+      PPointInfo = ^TPointInfo;
+      TPointInfo = array[TDirection] of record
+         steps_ : word; (* steps to start node *)
+         turns_ : word;  (* turns to start node *)
+         points_: longint; (* points to start node *)
+      end;
+
+      PEdgeList = ^TEdgeList;
+      TEdgeList = array [ TDirection ] of TEdge;
+
 
       TNode = record
           pos_          : TPos;
-          edges_        : array[TDirection] of TEdge;
+          edges_        : PEdgeList;
           visited_      : set of TDirection;
-          pointsToStart_: array[TDirection] of longint; 
+          pointsToStart_: PPointInfo;
       end;
 
       PRendier = ^TRendier;
@@ -83,6 +95,7 @@ procedure initializeNodes(const map: TMap; const mapSize: TPos);
   begin
     edge.steps_ := 0;
     edge.turns_ := 0;
+    edge.taken_ := false;
 
     if advancePos(pos, dir, minPos, mapSize) then begin
       if map[pos.x,pos.y] <> '#' then inc(edge.steps_);
@@ -119,9 +132,19 @@ var pos : TPos;
     i   : word;
     p   : TProgressBar;
 begin
-  p.init(mapSize.x * mapSize.y,'Nodes');
+  p.init((mapSize.x+1) * (mapSize.y+1),'Nodes');
   nodesInList_ := 0;
   fillchar(nodeList_, sizeof(nodeList_), 0);
+
+  for i:= 1 to MaxNodes do begin
+    nodeList_[i].edges_ := new(PEdgeList);
+    nodeList_[i].pointsToStart_ := new(PPointInfo);
+
+    (* Initialize the Memory *)
+    fillChar(nodeList_[i].edges_^,sizeof(TEdgeList), 0);
+    fillChar(nodeList_[i].pointsToStart_^,sizeof(TPointInfo), 0);
+  end;
+
   for pos.x := 0 to mapSize.x do begin
     for pos.y := 0 to mapSize.y do begin
       if ((map[pos.x,pos.y] <>'#') and isIntersection(pos, map, mapSize))
@@ -131,8 +154,8 @@ begin
         nodeList_[nodesInList_].pos_ := pos;
         nodeList_[nodesInList_].visited_ := [];
         for dir := North to South do begin
-          nodeList_[nodesInList_].edges_[dir].steps_ := 0;
-          nodeList_[nodesInList_].edges_[dir].turns_ := 0;
+          nodeList_[nodesInList_].edges_^[dir].steps_ := 0;
+          nodeList_[nodesInList_].edges_^[dir].turns_ := 0;
         end;
         if map[pos.x,pos.y] = 'S' then startNode := @nodeList_[nodesInList_]
         else if map[pos.x,pos.y] = 'E' then goalNode := @nodeList_[nodesInList_];
@@ -145,7 +168,7 @@ begin
   for i := 1 to nodesInList_ do
     for dir := North to South do begin
       p.step(1);
-      initializeEdge(nodeList_[i].pos_, dir, map, mapSize, nodeList_[i].edges_[dir]);
+      initializeEdge(nodeList_[i].pos_, dir, map, mapSize, nodeList_[i].edges_^[dir]);
     end;
   p.done;
 end;
@@ -175,9 +198,14 @@ begin
   compare := Equal;
 end;
 
+function computePoints(const steps: word; const turns: word): longint;
+begin
+  computePoints := longint(steps) + longint(turns) * 1000;
+end;
+
 function TRendier.getPoints: longint;
 begin
-  getPoints := longint(steps_) + longint(turns_) * 1000;
+  getPoints := computePoints(steps_, turns_);
 end;
 
 procedure computeLowestPoints(const startNode : PNode);
@@ -191,6 +219,7 @@ var position    : PNode;
     steps       : byte;
 begin
   position := startNode;
+  steps := 0;
 
   heap.init;
 
@@ -204,13 +233,15 @@ begin
     rendier := PRendier(heap.pop);
 
     if rendier^.heading_ in rendier^.pos_^.visited_ then begin
-      dispose(rendier);
+      dispose(rendier, done);
       continue; (* already visited from this direction *)
     end;
 
     rendier^.pos_^.visited_ := rendier^.pos_^.visited_ + [rendier^.heading_];
-    rendier^.pos_^.pointsToStart_[rendier^.heading_] := rendier^.getPoints;
-    
+    rendier^.pos_^.pointsToStart_^[rendier^.heading_].points_ := rendier^.getPoints;
+    rendier^.pos_^.pointsToStart_^[rendier^.heading_].steps_ := rendier^.steps_;
+    rendier^.pos_^.pointsToStart_^[rendier^.heading_].turns_ := rendier^.turns_;
+
     if steps = 0 then  fastWrite(0,1,LightGray,s);
     steps := (steps + 1 ) mod 64;
 
@@ -218,23 +249,23 @@ begin
       position := rendier^.pos_;
       if i = 1 then heading:= rendier^.heading_
       else heading:= nextDirection(rendier^.heading_, heading);
-      if (position^.edges_[heading].next_ <> nil) then begin
+      if (position^.edges_^[heading].next_ <> nil) then begin
         if i = 1 then
           heap.push(new(PRendier, init(
-              position^.edges_[heading].next_,
-              position^.edges_[heading].entry_,
-              rendier^.steps_ + position^.edges_[heading].steps_,
-              rendier^.turns_ + position^.edges_[heading].turns_)))
+              position^.edges_^[heading].next_,
+              position^.edges_^[heading].entry_,
+              rendier^.steps_ + position^.edges_^[heading].steps_,
+              rendier^.turns_ + position^.edges_^[heading].turns_)))
         else
           heap.push(new(PRendier, init(
-              position^.edges_[heading].next_,
-              position^.edges_[heading].entry_,
-              rendier^.steps_ + position^.edges_[heading].steps_,
-              rendier^.turns_ + position^.edges_[heading].turns_ + 1)))
+              position^.edges_^[heading].next_,
+              position^.edges_^[heading].entry_,
+              rendier^.steps_ + position^.edges_^[heading].steps_,
+              rendier^.turns_ + position^.edges_^[heading].turns_ + 1)))
       end;
     end;
 
-    dispose(rendier);
+    dispose(rendier, done);
   end;
 
   heap.done;
@@ -242,8 +273,9 @@ end;
 
 procedure setup(var input: Text); far;
 var maxX, maxY : word;
-    mapSize            : TPos;
+    mapSize    : TPos;
     map        : PMap;
+    i          : word;
 begin
   maxX := MaxMapSize+1; (* first value behind the map *)
   maxY := MaxMapSize+1;
@@ -265,15 +297,24 @@ begin
   dispose(map);
 end;
 
+procedure tearDown(var input: Text); far;
+var i: word;
+begin
+  for i:= 1 to MaxNodes do begin
+    dispose(nodeList_[i].edges_);
+    dispose(nodeList_[i].pointsToStart_);
+  end;
+end;
+
 function getFinishPoints(const goalNode: PNode): longint;
 var i : TDirection;
     points: longint;
 begin
   points := 0;
   for i:= North to South do begin
-    if ((goalNode^.pointsToStart_[i] < points)  and
-        (goalNode^.pointsToStart_[i] > 0)) or (points = 0) then
-        points := goalNode^.pointsToStart_[i];
+    if ((goalNode^.pointsToStart_^[i].points_ < points)  and
+        (goalNode^.pointsToStart_^[i].points_ > 0)) or (points = 0) then
+        points := goalNode^.pointsToStart_^[i].points_;
   end;
 
   assert(points > 0, 'No finish heading found');
@@ -287,67 +328,103 @@ end;
 
 function traceSteps(const startNode: PNode; const goalNode: PNode): longint;
   function isOption(const node: PNode; const dir: TDirection; const targetPoints: longint): PNode;
-  
+
   begin
     isOption := nil;
-    if node^.pointsToStart_[dir] = targetPoints then
+    if node^.pointsToStart_^[dir].points_ = targetPoints then
       isOption := node;
-  end;              
-
-  procedure addAllOptions(const node: PNode; 
-                          const rendier: PRendier;
-                          var posibilities: TDequeue);
-  var dir        : TDirection;
-      nodeOption : PNode;
-      nextNode   : PNode;
-  begin
-    for dir := North to South do begin
-      nextNode := node^.edges_[dir].next_;
-      if nextNode = nil then continue; (* no next node in this direction *)
-      
-      if dir = heading then begin
-        nodeOption := isOption(node, dir, rendier^.getPoints);
-        if nodeOption <> nil then
-          posibilities.pushBack(new(PRendier, init(nextNode, 
-                                                   node^.edges_[dir].entry_,
-                                                   rendier^.steps_ - node^.edges_[dir].steps_,
-                                                   rendier^.turns_ - node^.edges_[dir].turns_)));
-      end else begin
-        nodeOption := isOption(node, dir, rendier^.getPoints - 1000);
-        if nodeOption <> nil then
-           posibilities.pushBack(new(PRendier, init(nextNode, 
-                                                   node^.edges_[dir].entry_,
-                                                   rendier^.steps_ - node^.edges_[dir].steps_,
-                                                   rendier^.turns_ - node^.edges_[dir].turns_ - 1)));
-      end;
-    end;
   end;
+
+  function addAllOptions(const node: PNode;
+                          const rendier: PRendier;
+                          var posibilities: TDequeue): longint;
+  var dir           : TDirection;
+      rdir          : TDirection;
+      nextNode      : PNode;
+      result        : longint;
+      shadowRendier : PRendier;
+      pointNoTurn   : longint;
+      pointWithTurn : longint;
+      multipleOptions: boolean;
+  begin
+    result := 0;
+    multipleOptions := false;
+    pointNoTurn := rendier^.getPoints;
+    pointWithTurn := pointNoTurn - 1000; (* points with one turn less *)
+
+    for dir := North to South do begin
+      rdir := reverseDirection(dir);
+
+      if node^.edges_^[dir].taken_ then continue; (* edge already taken *)
+      if node^.edges_^[dir].next_ = nil then continue; (* no next node in this direction *)
+      if node^.edges_^[dir].steps_ > rendier^.steps_ then continue; (* not enough steps left *)
+      if node^.edges_^[dir].turns_ > rendier^.turns_ then continue; (* not enough turns left *)
+      if node^.pointsToStart_^[rdir].points_ = 0 then continue; (* no way to start node in this direction *)
+
+      if ((dir = rendier^.heading_) and (node^.pointsToStart_^[rdir].points_ = pointNoTurn))  or
+         ((dir <> rendier^.heading_) and (node^.pointsToStart_^[rdir].points_ = pointWithTurn)) then begin
+           nextNode := node^.edges_^[dir].next_;
+           if dir = rendier^.heading_ then begin
+             shadowRendier := new(PRendier, init(nextNode,
+                                                node^.edges_^[dir].entry_,
+                                                rendier^.steps_ - node^.edges_^[dir].steps_,
+                                                rendier^.turns_ - node^.edges_^[dir].turns_));
+           end else begin
+             shadowRendier := new(PRendier, init(nextNode,
+                                                node^.edges_^[dir].entry_,
+                                                rendier^.steps_ - node^.edges_^[dir].steps_,
+                                                rendier^.turns_ - node^.edges_^[dir].turns_ -1)); 
+           end;
+           posibilities.pushBack(shadowRendier);
+           node^.edges_^[dir].taken_ := true; (* mark the edge as taken, as it is now in the backlog *)
+           inc(result, node^.edges_^[dir].steps_);
+           if multipleOptions then dec(result);
+           multipleOptions := true;
+         end;
+    end;
+  addAllOptions := result;
+end;
 
 var rendier : PRendier;
     posibilities : TDequeue;
     points : longint;
+    totalSteps : longint;
     heading, reverse : TDirection;
 begin
   posibilities.init;
   points := getFinishPoints(goalNode);
+  totalSteps := 0;
   for heading := North to South do begin
     reverse := reverseDirection(heading);
-    if points = goalNode^.pointsToStart_[heading] then begin
-      rendier := new(PRendier, 
-          init(goalNode^.edges_[reverse].next_, 
-               goalNode^.edges_[reverse].entry_, 
-               goalNode^.pointsToStart_.steps_ - goalNode^.edges_[reverse].steps_,
-               goalNode^.pointsToStart_.turns_ - goalNode^.edges_[reverse].turns_));
+    if points = goalNode^.pointsToStart_^[heading].points_ then begin
+      rendier := new(PRendier,
+          init(goalNode^.edges_^[reverse].next_,
+               goalNode^.edges_^[reverse].entry_,
+               goalNode^.pointsToStart_^[heading].steps_ - goalNode^.edges_^[reverse].steps_,
+               goalNode^.pointsToStart_^[heading].turns_ - goalNode^.edges_^[reverse].turns_));
+      goalNode^.edges_^[reverse].taken_ := true; (* mark the edges as taken, as it is now in the backlog *)
+      inc(totalSteps, goalNode^.edges_^[reverse].steps_);
       posibilities.pushBack(rendier);
     end;
   end;
+  
+  while posibilities.size > 0 do begin
+    rendier := PRendier(posibilities.front);
+    if rendier^.pos_ <> startNode then begin
+      inc(totalSteps, addAllOptions(rendier^.pos_, rendier, posibilities));
+    end;
+
+    posibilities.popFront; (* remove rendier from the queue, also disposes it already *)
+  end;
+  posibilities.done;
+  traceSteps := totalSteps;
 end;
 
 function part2(var input: Text):comp; far;
 begin
-  part2 := 0;
+  part2 := traceSteps(startNode, goalNode) + 1; (* +1 for the start node *)
 end;
 
 begin
-  runAoc(InputFileName, 16, part1, part2, setup, nil);
+  runAoc(InputFileName, 16, part1, part2, setup, tearDown);
 end.
