@@ -2,7 +2,7 @@ program day17;
 (*This is the implementation of the aoc24 day 17*)
 (* https://adventofcode.com/2024/day/17 *)
 
-uses aoc, stdint, cassert, utils;
+uses aoc, stdint, cassert, utils, dequeue, uintitem, sort;
 const InputFileName = 'INP\DAY17_IN.TXT';
 const MaxByte  : Uint64_t = ($ff,0,0,0,0,0,0,0);
       MaxUint64: Uint64_t = ($ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff);
@@ -15,6 +15,12 @@ type TRegisterFile = record
     end;
     TInstructions = ( ADV, BXL, BST, JNZ, BXC, OUTP, BDV, CDV );
     TMemory = array[0..128] of byte; (* 128 3 bit Memory cells *)
+    TPrintFunction = procedure(const value: byte);
+
+procedure printToConsole(const value: byte); far;
+begin
+    write(value,',');
+end;
 
 function decodeInstruction(const reg: TRegisterFile; const mem: TMemory): TInstructions;
 var s: string;
@@ -34,7 +40,10 @@ begin
   end; end;
 end;
 
-function executeInstruction(var reg: TRegisterFile; var mem: TMemory; const size : Byte) : Boolean;
+function executeInstruction(var reg: TRegisterFile;
+                            const mem: TMemory;
+                            const size : Byte;
+                            const printFunc: TPrintFunction) : Boolean;
   procedure getLiteralValue(const reg: TRegisterFile; const mem: TMemory; var result: Uint64_t);
   begin
     fromLongInt64(mem[reg.ipc + 1] and $07, result); (* 3 bit literal value *)
@@ -57,7 +66,7 @@ function executeInstruction(var reg: TRegisterFile; var mem: TMemory; const size
     end; end;
   end;
 
-  procedure iADV(var reg: TRegisterFile; var mem: TMemory);
+  procedure iADV(var reg: TRegisterFile; const mem: TMemory);
   var tmp : Uint64_t;
   begin
     getComboOperand(reg, mem, tmp);
@@ -71,7 +80,7 @@ function executeInstruction(var reg: TRegisterFile; var mem: TMemory; const size
     inc(reg.ipc, 2);
   end;
 
-  procedure iBXL(var reg: TRegisterFile; var mem: TMemory);
+  procedure iBXL(var reg: TRegisterFile; const mem: TMemory);
   var tmp : Uint64_t;
   begin
     getLiteralValue(reg, mem, tmp);
@@ -79,7 +88,7 @@ function executeInstruction(var reg: TRegisterFile; var mem: TMemory; const size
     inc(reg.ipc, 2);
   end;
 
-  procedure iBST(var reg: TRegisterFile; var mem: TMemory);
+  procedure iBST(var reg: TRegisterFile; const mem: TMemory);
   var tmp : Uint64_t;
   begin
     getComboOperand(reg, mem, tmp);
@@ -88,7 +97,7 @@ function executeInstruction(var reg: TRegisterFile; var mem: TMemory; const size
     inc(reg.ipc, 2);
   end;
 
-  procedure iJNZ(var reg: TRegisterFile; var mem: TMemory);
+  procedure iJNZ(var reg: TRegisterFile; const mem: TMemory);
   var tmp : Uint64_t;
   begin
     getLiteralValue(reg, mem, tmp);
@@ -99,14 +108,14 @@ function executeInstruction(var reg: TRegisterFile; var mem: TMemory; const size
     end;
   end;
 
-  procedure iBXC(var reg: TRegisterFile; var mem: TMemory);
+  procedure iBXC(var reg: TRegisterFile; const mem: TMemory);
   var tmp : Uint64_t;
   begin
     xor64(reg.b, reg.c);
     inc(reg.ipc, 2);
   end;
 
-  procedure iBDV(var reg: TRegisterFile; var mem: TMemory);
+  procedure iBDV(var reg: TRegisterFile; const mem: TMemory);
   var tmp : Uint64_t;
   begin
     getComboOperand(reg, mem, tmp);
@@ -122,7 +131,7 @@ function executeInstruction(var reg: TRegisterFile; var mem: TMemory; const size
     inc(reg.ipc, 2);
   end;
 
-  procedure iCDV(var reg: TRegisterFile; var mem: TMemory);
+  procedure iCDV(var reg: TRegisterFile; const mem: TMemory);
   var tmp : Uint64_t;
   begin
     getComboOperand(reg, mem, tmp);
@@ -138,11 +147,11 @@ function executeInstruction(var reg: TRegisterFile; var mem: TMemory; const size
     inc(reg.ipc, 2);
   end;
 
-  procedure iOutp(var reg: TRegisterFile; var mem: TMemory);
+  procedure iOutp(var reg: TRegisterFile; const mem: TMemory; const printFunc: TPrintFunction);
   var tmp : Uint64_t;
   begin
     getComboOperand(reg, mem, tmp);
-    write(tmp[0] and $07,','); (* output the combo Operand Modulo 8 *)
+    printFunc(tmp[0] and $07); (* output the combo Operand Modulo 8 *)
     inc(reg.ipc, 2);
   end;
 
@@ -155,7 +164,7 @@ begin
         BST: iBST(reg, mem);
         JNZ: iJNZ(reg, mem);
         BXC: iBXC(reg, mem);
-        OUTP: iOutp(reg, mem);
+        OUTP: iOutp(reg, mem, printFunc);
         BDV: iBDV(reg, mem);
         CDV: iCDV(reg, mem);
     end;
@@ -192,7 +201,7 @@ var reg: TRegisterFile;
     size: Byte;
 begin
   loadProgram(input, reg, mem, size);
-  while executeInstruction(reg, mem, size) do begin end;
+  while executeInstruction(reg, mem, size, printToConsole) do begin end;
   writeln;
   writeln('A: ', Uint64ToStr(reg.a));
   writeln('B: ', Uint64ToStr(reg.b));
@@ -200,9 +209,69 @@ begin
   part1 := 0;
 end;
 
-function part2(var input: Text):comp; far;
+var printedValue : byte;
+procedure printToGlobal(const value: byte); far;
 begin
-  part2 := 0;
+  printedValue := value;
+end;
+
+
+procedure reverseRegisterA(const startValue: Uint64_t;
+                           const target: byte;
+                           const mem: TMemory;
+                           const size: Byte;
+                           var candidates: PDeQueue);
+var reg: TRegisterFile;
+    i  : longint;
+begin
+  i:= 0;
+  for i:=0 to 7 do begin
+    FillChar(reg, SizeOf(reg), 0);
+    reg.a := startValue;
+    add64LongInt(reg.a, i);
+    printedValue := $ff;
+    while printedValue = $ff do executeInstruction(reg, mem, size, printToGlobal);
+    if printedValue = target then candidates^.pushBack(new(PUintItem, init(reg.a)));
+  end;
+end;
+
+function part2(var input: Text):comp; far;
+var mem: TMemory;
+    size: Byte;
+    reg: TRegisterFile;
+    i  : integer;
+    c1, c2: PDeQueue;
+begin
+  loadProgram(input, reg, mem, size);
+  FillChar(reg, SizeOf(reg), 0); (* reset the registers *)
+  c1 := new(PDeQueue, init);
+  c2 := new(PDeQueue, init);
+
+  c1^.pushBack(new(PUintItem, init(reg.a))); (* set a starting value *)
+
+  for i:= size -1 downto 0 do begin
+    while c1^.size > 0 do begin
+      reg.a := PUintItem(c1^.front)^.value_;
+      c1^.popFront;
+      shiftLeft64(3, reg.a); (* shift the value left by 3 bits *)
+      reverseRegisterA(reg.a, mem[i], mem, size, c2);
+    end;
+    assert(c2^.size > 0, 'No candidates found');
+
+    c1^.dispose;
+    c1 := c2;
+    c2 := new(PDeQueue, init);
+  end;
+
+  sortQueue(c1);
+  reg.a := PUintItem(c1^.front)^.value_;
+
+  c1^.dispose;
+  c2^.dispose;
+  part2 := uint64ToComp(reg.a);
+
+  while executeInstruction(reg, mem, size, printToConsole) do begin end;
+  writeln;
 end;
 
 begin
