@@ -639,10 +639,92 @@ function isEqual32(var a,b: Uint32_t): boolean;
 begin
    halt(-1); (*Not implemented yet...*)
 end;
+
+{$IFDEF cpum68k}
+procedure shiftLeft64(count: byte; var a: Uint64_t);
+begin  
+asm
+    move.l a, A0  ; Load address of a into A0
+    moveq #0, D0  ; Clear D0
+    move.b count, D0      ; Load count into D0 (lower 8 bits only)
+    sub.b #1, D0  ; Decrement count to match the loop condition
+    ; Load the data into D1 and D2
+    ; Load the significant qword into D1
+    move.l 4(A0), D1
+    move.l 0(A0), D2 
+    ror.w #8, D1 
+    ror.w #8, D2
+    swap D1
+    swap D2
+    ror.w #8, D1
+    ror.w #8, D2
+    ; Shift the data
+    @shift_loop:
+    lsl.l #1, D2
+    roxl.l #1, D1
+    dbra D0, @shift_loop; Decrement D0 and loop if not zero
+    
+    ; Store the result back into a
+    ror.w #8, D1
+    ror.w #8, D2
+    swap D1
+    swap D2
+    ror.w #8, D1
+    ror.w #8, D2
+
+    move.l D1, 4(A0)
+    move.l D2, 0(A0)
+end['D0', 'D1', 'D2', 'A0'];
+end;
+
+
+procedure shiftRight64(count: byte; var a: Uint64_t);
+begin
+asm
+    move.l a, A0  ; Load address of a into A0
+    moveq #0, D0  ; Clear D0
+    move.b count, D0      ; Load count into D0 (lower 8 bits only)
+    subq.b #1, D0         ; Adjust for DBRA loop (runs count times)
+    ; Load the data into D1 and D2
+    
+    ; Load the significant qword into D1
+    move.l 4(A0), D1
+    move.l 0(A0), D2 
+    ror.w #8, D1 
+    ror.w #8, D2
+    swap D1
+    swap D2
+    ror.w #8, D1
+    ror.w #8, D2
+   
+    @shift_loop:
+    asr.l #1, D1
+    roxr.l #1, D2
+    dbra D0, @shift_loop; Decrement D0 and loop if not zero
+    ; Store the result back into a
+    ror.w #8, D1
+    ror.w #8, D2
+    swap D1
+    swap D2
+    ror.w #8, D1
+    ror.w #8, D2
+
+    move.l D1, 4(A0)
+    move.l D2, 0(A0)
+end ['D0', 'D1', 'D2', 'A0'];
+end;
+
+{$ELSE}
 procedure shiftLeft64(count: byte; var a: Uint64_t);
 begin
   halt(-1); (*Not implemented yet... *)
 end;
+
+procedure shiftRight64(count: byte; var a: Uint64_t);
+begin
+  halt(-1); (*Not implemented yet... *)
+end;
+{$ENDIF}
 {$ENDIF}
 
 function isGreater64(const a,b: Uint64_t): boolean;     (* a > b  *)
