@@ -189,7 +189,9 @@ begin
   skipLabel(input); fromLongInt64(readLong(input), reg.b); (* load the initial value into register B *)
   skipLabel(input); fromLongInt64(readLong(input), reg.c); (* load the initial value into register C *)
   skipLabel(input);  size:= readLongArray(input, tmp);
-  
+
+  WriteLn('Registers: A=', Uint64ToStr(reg.a), ' B=', Uint64ToStr(reg.b), ' C=', Uint64ToStr(reg.c));
+  WriteLn('Program size: ', size);
   FillChar(mem, SizeOf(mem), 0);
   for i := 0 to size - 1 do
     mem[i] := tmp[i] and $07; (* only the lower 3 bits are used *)
