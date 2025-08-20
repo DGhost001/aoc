@@ -99,9 +99,37 @@ begin
   part1 := mem[MaxPos.x, MaxPos.y]; (* Return the distance to the bottom right corner *)
 end;
 
+var listOfCorruptions : array [1..4096] of TPos;
+    listSize : word;
 function part2(var input: Text):comp; far;
+var i, lowerLimit, upperLimit, center: word;
 begin
-  part2 := 0;
+  listSize := countLines(input);
+  assert(listSize <= 4096, 'Too many corruptions in the input file');
+  FillChar(listOfCorruptions, SizeOf(listOfCorruptions), 0);
+  for i:= 1 to listSize do
+    readPos(input, listOfCorruptions[i]);
+  lowerLimit := 1;
+  upperLimit := listSize;
+  while lowerLimit < upperLimit do begin
+    center := (lowerLimit + upperLimit) div 2;
+    write('Lower Limit: ', lowerLimit, ' Upper Limit: ', upperLimit, ' Center: ', center);
+    
+    FillChar(mem, SizeOf(mem), 0); (* Reset the memory map *)
+    for i:= 1 to center do
+      corruptMemory(mem, listOfCorruptions[i]);
+    computeDistanceMap(mem, MinPos); (* Compute the distance map with the current corruptions *)
+    writeln(' - Steps: ', mem[MaxPos.x, MaxPos.y]);
+        
+    if (mem[MaxPos.x, MaxPos.y] = 0) or
+       (mem[MaxPos.x, MaxPos.y] = CorruptedMemory) then 
+       (* Than there is no longer a way to the end, so the cutoff is earlier *)
+       upperLimit := center
+    else (* There is still a way to the end, so we can try to include more corruptions *)
+       lowerLimit := center + 1;
+  end;
+  writeln(' Close curruption at memory cell: ', listOfCorruptions[center].x, ',', listOfCorruptions[center].y);
+  part2 := center; (* Return the number of corruptions until the first cutoff point *)
 end;
 
 begin
