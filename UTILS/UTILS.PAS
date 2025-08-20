@@ -36,6 +36,7 @@ function reverseParity(const a: TParity) : TParity;
 function readInteger(var input: Text) : integer;
 function readLong(var input: Text) : longint;
 function readComp(var input: Text) : comp;
+procedure readPos(var input: Text; var pos: TPos);
 
 function readLongArray(var input : Text; var values : array of longint) : word;
 function readUint64Array(var input : Text; var values: array of uint64_t) : word;
@@ -176,6 +177,12 @@ begin
   val(s, result, code);
   readComp := result;
   assert(code = 0, 'Invalide number format');
+end;
+
+procedure readPos(var input: Text; var pos: TPos);
+begin
+  pos.x := readLong(input);
+  pos.y := readLong(input);
 end;
 
 function readLongArray(var input : Text; var values : array of longint) : word;
