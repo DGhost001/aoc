@@ -135,7 +135,42 @@ begin
   end;
   isArtPatternPossible := result;
   backlog.done;
-end;                           
+end;
+
+function countPossibleArtPatterns(const towels: TTowels;
+                                  const art   : TArtPattern): comp;
+var countPerIndex: array[0..64] of comp;
+
+function countFromIndex(index: byte): comp;
+var i      : integer;
+    result : comp;
+    tmp    : comp;
+begin
+    result := 0;
+    if index = art.size_ then
+      result := 1
+    else if index < art.size_ then begin
+        if countPerIndex[index] >= 0 then
+            result := countPerIndex[index]
+        else begin
+            for i:= 0 to towels.size_ - 1 do begin
+                if isTowelMatching(towels.towelPattern_[i], art, index) then begin
+                    (* comp is computed in the FPU ... we need to call first and than add else *)
+                    (* a recursion may corrupt the FPU stack :( *)
+                    tmp    := countFromIndex(index + towels.towelPattern_[i].size_);
+                    result := result + tmp;
+                end;
+            end;
+        end;
+    end;
+    countPerIndex[index] := result;
+    countFromIndex := result;
+end;
+
+begin
+    fillchar(countPerIndex, sizeof(countPerIndex), $ff);
+    countPossibleArtPatterns := countFromIndex(0);
+end;
 
 function part1(var input: Text):comp; far;
 var count: word;
@@ -158,8 +193,29 @@ begin
 end;
 
 function part2(var input: Text):comp; far;
+var count : word;
+    result: comp;
+    tmp   : comp;
+    towels: TTowels;
+    art   : TArtPattern;
+    p     : TProgressBar;
 begin
-  part2 := 0;
+  count := 0;
+  result := 0;
+  p.init(countLines(input)-2,'Count');
+  readTowelPatterns(input, towels);
+  readln(input); (* Read the empty line *)
+  while not eof(input) do begin
+    readArtPattern(input, art);
+    tmp := countPossibleArtPatterns(towels, art);
+    if tmp > 0 then
+      inc(count);
+    result := result + tmp;
+    p.step(1);
+  end;
+  p.done;
+  writeln('Count of possible art patterns: ', count);
+  part2 := result;
 end;
 
 begin
