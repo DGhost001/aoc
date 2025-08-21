@@ -19,6 +19,16 @@ interface
            function value : longint;
         end;
 
+        PWordItem = ^TWordItem;
+        TWordItem = object(ItemType)
+           value_ : word;
+
+           constructor init(const i : word);
+           constructor copy(const other : PWordItem);
+           function compare(other:PItemType):TRelation;virtual;
+           function value : word;
+        end;
+
 implementation
 
 constructor ItemType.init;
@@ -54,6 +64,30 @@ begin
 end;
 
 function TLongItem.value : longint;
+begin
+  value := value_;
+end;
+
+constructor TWordItem.init(const i : word);
+begin
+  value_ := i;
+end;
+
+constructor TWordItem.copy(const other : PWordItem);
+begin
+  value_ := other^.value_;
+end;
+
+function TWordItem.compare(other:PItemType):TRelation;
+var o : PWordItem;
+begin
+  o := PWordItem(other);
+  if value_ > o^.value_ then compare := Bigger else
+  if value_ < o^.value_ then compare := Smaller else
+  compare := Equal;
+end;
+
+function TWordItem.value : word;
 begin
   value := value_;
 end;
