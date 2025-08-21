@@ -77,7 +77,8 @@ begin
       nextPos := current^.pos_;
       if advancePos(nextPos, dir, MinPos, MaxPos) then begin
         if (mem[nextPos.x, nextPos.y] = 0) then
-            queue.push(new(PPosition, init(nextPos, current^.weight_ + 1))); (* Push the next position with incremented weight *)
+            (* Push the next position with incremented weight *)
+            queue.push(new(PPosition, init(nextPos, current^.weight_ + 1))); 
       end;
     end;
     (* Process the current position *)
