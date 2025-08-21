@@ -62,6 +62,29 @@ function dmin(const d1, d2: double): double;
 function inRange(const value, lower, upper : longint) : boolean;
 function inArea(const point, lower, upper : TPos) : boolean;
 
+(**
+ * @brief Manually skips past an end-of-line and a subsequent empty line.
+ * @param input The text file variable to read from.
+ *
+ * @details This procedure is a crucial workaround for inconsistent I/O behavior
+ * between different Pascal compilers (specifically the target Turbo Pascal mode
+ * vs. modern Free Pascal).
+ *
+ * After `Eoln` is true, the file pointer is left immediately
+ * before the end-of-line marker of the first line. A standard
+ * `readln` in this state can behave ambiguously across compilers, sometimes
+ * skipping one line, sometimes two, leading to hard-to-debug errors where
+ * input lines are skipped.
+ *
+ * This procedure resolves the ambiguity by manually reading characters to
+ * consume the CR+LF sequence (`#13#10`) for the current line, and then does
+ * the same for the following empty line. This ensures the file pointer is
+ * always correctly positioned at the start of the first art pattern,
+ * regardless of the compiler's `readln` implementation. It is specifically
+ * tailored for the CR+LF line endings of the target platform (Atari/DOS).
+ *)
+procedure skipLine(var input: Text);
+
 implementation
 
 constructor OPos.init(const pos : TPos);
@@ -388,5 +411,14 @@ begin
   inArea := inRange(point.x, lower.x, upper.x) and
             inRange(point.y, lower.y, upper.y);
 end;
+
+procedure skipLine(var input: Text);
+var c: char;
+begin
+    read(input, c);
+    while c <> #13 do read(input, c);
+    read(input, c); (* Read the #10 character *)
+end;
+
 begin
 end.

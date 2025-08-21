@@ -181,7 +181,7 @@ begin
   count := 0;
   p.init(countLines(input)-2,'Count');
   readTowelPatterns(input, towels);
-  readln(input); (* Read the empty line *)
+  skipLine(input); (* Read the empty line *)
   while not eof(input) do begin
     readArtPattern(input, art);
     if isArtPatternPossible(towels, art) then
@@ -193,28 +193,48 @@ begin
 end;
 
 function part2(var input: Text):comp; far;
+const hexDigits: array[0..15] of char = '0123456789abcdef';
 var count : word;
     result: comp;
     tmp   : comp;
     towels: TTowels;
     art   : TArtPattern;
     p     : TProgressBar;
+    found : array[0..1024] of boolean;
+    idx   : word;
+    debug : byte;
 begin
   count := 0;
   result := 0;
   p.init(countLines(input)-2,'Count');
   readTowelPatterns(input, towels);
-  readln(input); (* Read the empty line *)
+  skipLine(input); (* Read the empty line *)
+  FillChar(found, sizeof(found), 0);
+  idx := 0;
   while not eof(input) do begin
     readArtPattern(input, art);
     tmp := countPossibleArtPatterns(towels, art);
+    found[idx] := tmp > 0;
     if tmp > 0 then
       inc(count);
     result := result + tmp;
     p.step(1);
-  end;
-  p.done;
+    inc(idx);
+    assert(idx < sizeof(found), 'Too many art patterns found');
+  end; 
+  p.done; (*  *)
   writeln('Count of possible art patterns: ', count);
+  debug := 0;
+  for idx := 0 to high(found) do begin
+    debug := debug shl 1;
+    if found[idx] then inc(debug);
+    if idx mod 8 = 7 then begin
+      write(hexDigits[debug shr 4], hexDigits[debug and $0f], ' ');
+      debug := 0;
+    end;
+    if idx mod 64 = 63 then writeln;
+  end;
+  WriteLn;
   part2 := result;
 end;
 
