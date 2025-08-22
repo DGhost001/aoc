@@ -5,6 +5,14 @@ interface
 implementation
 
 {$IFNDEF ATARI}
+{$IFDEF LINUX}
+uses crt;
+procedure fastwrite(col,row,attrib:byte;str:string);
+const esc = #27+'[';
+begin
+  Write(esc,'s',esc,row,';',col,'H',esc,30+attrib,'m',str,esc,'0m',esc,'u');
+end;
+{$ELSE}
 procedure fastwrite(col,row,attrib:byte;str:string);
 begin
   inline
@@ -16,6 +24,7 @@ begin
      $89/$1D/$47/$47/$E2/$Ea/$2A/$C0/$74/$10/$BA/$00/$B0/
      $8E/$DA/$46/$8a/$9A/str/$89/$1D/$47/$47/$E2/$F5/$1F);
 end;
+{$ENDIF}
 {$ELSE}
 uses app;
 procedure fastwrite(col,row,attrib:byte;str:string);

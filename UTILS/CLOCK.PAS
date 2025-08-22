@@ -28,6 +28,14 @@ begin
   gemdos_super(oldStack);
   getTickCount := result;
 end;
+{$ELSE}
+{$IFDEF LINUX}
+uses dos,linux, stdint, sysutils;
+
+function getTickCount : longint;
+begin
+  getTickCount := getTickCount64 and $7fffffff;
+end;
 
 {$ELSE}
 uses dos, stdint;
@@ -49,6 +57,7 @@ begin
   end;
 end;
 
+{$ENDIF}
 {$ENDIF}
 
 function gregorianToJulian(year, month, day : longint): longint;
