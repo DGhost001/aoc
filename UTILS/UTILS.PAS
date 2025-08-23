@@ -52,6 +52,7 @@ procedure addPos(var pos : TPos; const delta: TPos);
 procedure subPos(var pos : TPos; const delta: TPos);
 procedure deltaPos(const p1, p2 : TPos; var delta : TPos);
 procedure scalePos(const scale : longint; var p : TPos);
+function manhatten(const p1, p2: TPos): longint;
 
 function nextDirection(const origin : TDirection; dir : TDirection): TDirection;
 function reverseDirection(const dir: TDirection): TDirection;
@@ -389,6 +390,11 @@ procedure scalePos(const scale : longint; var p : TPos);
 begin
   p.x := p.x * scale;
   p.y := p.y * scale;
+end;
+
+function manhatten(const p1, p2: TPos): longint;
+begin
+  manhatten := abs(p1.x - p2.x) + abs(p1.y - p2.y);
 end;
 
 function dmax(const d1, d2: double): double;
