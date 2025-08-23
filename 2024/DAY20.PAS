@@ -2,7 +2,7 @@
 Program day20;
 (*This is the implementation of the aoc24 day 1*)
 
-Uses aoc, utils, cassert;
+Uses aoc, utils, cassert, ProgressBar;
 
 Const InputFileName = 'INP\DAY20_IN.TXT';
 
@@ -108,10 +108,52 @@ Begin
   part1 := count;
 End;
 
-Function part2(Var input: Text): comp;
-far;
+function countSuperGlitches(const progMap: TProgrammMap; const targetValue: longint; const maxDist : word): LongInt;
+var count : LongInt;
+    startPos   : TPos;
+    endPos     : TPos;
+    dist       : longint;
+    p          : TPRogressBar;
+begin
+  count := 0;
+  p.init((MaxPos.x+1)*(MaxPos.y+1), 'Scan');
+  for startPos.y := MinPos.y to MaxPos.y do
+    for startPos.x := MinPos.x to MaxPos.x do begin
+      if progMap[startPos.x, startPos.y] <> 0 then
+        for endPos.y := startPos.y - maxDist to startPos.y + maxDist do
+          for endPos.x := startPos.x - maxDist to startPos.x + maxDist do begin
+            dist := manhatten(startPos, endPos);
+            if (dist <= maxDist) and 
+              inArea(endPos, MinPos, MaxPos) and
+              (progMap[endPos.x, endPos.y] <> 0) and
+              (progMap[endPos.x, endPos.y] - progMap[startPos.x, startPos.y] - (dist - 1) >= targetValue)
+              then Inc(count);
+          end;
+      p.step(1);
+    end;
+  p.done;  
+  countSuperGlitches := count;
+end;
+
+Function part2(Var input: Text): comp; far;
+var progMap : PProgrammMap;
+    map     : PCharMap;
+    maxX, maxY : word;
+    count   : longint;
 Begin
-  part2 := 0;
+  new(progMap);
+  new(map);
+
+  maxX := 141;
+  maxY := 141;
+
+  loadCharMap(input, map^, maxX, maxY);
+  tracePath(progMap^, map^);
+  count := countSuperGlitches(progMap^, 100, 20);
+
+  dispose(map);
+  dispose(progMap);
+  part2 := count;
 End;
 
 Begin
