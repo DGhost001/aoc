@@ -1,6 +1,6 @@
 
 Program day20;
-(*This is the implementation of the aoc24 day 1*)
+(*This is the implementation of the aoc24 day 20*)
 
 Uses aoc, utils, cassert, ProgressBar;
 
