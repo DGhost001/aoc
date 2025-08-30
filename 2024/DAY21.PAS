@@ -49,7 +49,12 @@ type TButton = (BT_NONE, BT_ACCEPT, BT_UP, BT_DOWN, BT_LEFT, BT_RIGHT,
         procedure sort;
         procedure keepOnlyShortest;
         procedure keepOnlyOne;
+        function shortestLength: word;
      end;
+
+    TKeySequenceCache = array[TButton, TButton] of TKeySequences;
+    TKeyRecurseCache  = array[TButton, TButton, 1..25] of comp;
+
 (*
 +---+---+---+
 | 7 | 8 | 9 |
@@ -136,6 +141,13 @@ begin
   while keySequences_.size > 1 do keySequences_.popBack;
 end;
 
+
+function TKeySequences.shortestLength: word;
+begin
+  if keySequences_.size = 0 then shortestLength := 0
+  else
+   shortestLength := PKeySequenceItem(keySequences_.front)^.length;
+end;
 constructor TButtonItem.init(const key: TButton);
 begin
   key_ := key;
@@ -255,7 +267,57 @@ begin
 
   (* Drop all longer sequences than the shortests ones *)
   sequences.keepOnlyShortest;
+end;
 
+(**
+ * Initializes the given TKeySequenceCache by iterating over all possible button pairs.
+ * For each pair (b1, b2), it initializes the cache entry and, if both buttons are available
+ * in the DirectionalKeyPad, builds the corresponding key sequence and stores it in the cache.
+ *
+ * @param[inout] cache Reference to the TKeySequenceCache to be initialized.
+ **)
+procedure intializeCache(var cache: TKeySequenceCache);
+var b1, b2 : TButton;
+begin
+  for b1 := BT_NONE to BT_ZERO do
+    for b2 := BT_NONE to BT_ZERO do begin
+      cache[b1,b2].init;
+      if DirectionalKeyPad[b1].available and DirectionalKeyPad[b2].available then
+        buildKeySequence(DirectionalKeyPad, b1, b2, cache[b1,b2]);         
+    end;
+end;
+
+function findLengthOfSequence(const depth: word;
+                              const b1, b2: TButton;
+                              const keyCache: TKeySequenceCache;
+                              var  recurseCache: TKeyRecurseCache
+                             ): comp;
+var currentButton, nextButton : TButton;
+    it,it2                    : PDeQueueIterator;
+    length, minLength         : comp;
+begin
+  if depth <=1 then findLengthOfSequence := keyCache[b1,b2].shortestLength else
+  if recurseCache[b1,b2,depth] > 0 then findLengthOfSequence:= recurseCache[b1,b2,depth]
+  else begin
+    minLength := -1;
+    it := keyCache[b1,b2].keySequences_.first;
+    while it <> nil do begin
+      length := 0;
+      currentButton := BT_ACCEPT; (* We always start and end on the accept button, we need to *)
+      it2 := PKeySequenceItem(it^.at)^.sequence_.first;
+      while it2 <> nil do begin
+        nextButton := PButtonItem(it2^.at)^.key_;
+        inc(length, findLengthOfSequence(depth-1, currentButton, nextButton, keyCache, recurseCache));
+        currentButton := nextButton;
+        it2 := it2^.next;
+      end;
+      if (minLength = -1) or (minLength > length) then
+        minLength := length;
+      it := it^.next
+    end;
+    recurseCache[b1,b2,depth] := minLength;
+    findLengthOfSequence := minLength;
+  end;
 end;
 
 procedure printKeySequence(const sequence: PKeySequenceItem);
@@ -427,45 +489,55 @@ begin
   buildKeySequenceFromString := number;
 end;
 
-function shortestControlSequence(numericPad: PKeySequenceItem): word;
+var keyCache    : ^TKeySequenceCache;
+    recurseCache: ^TKeyRecurseCache;
+
+function shortestControlSequence(numericPad: PKeySequenceItem;
+                                 const depth : word): comp;
 var controlPad1 : PKeySequences;
-    controlPad2 : PKeySequences;
-    controlPad3 : PKeySequences;
     it          : PDequeueIterator;
     it2         : PDeQueueIterator;
-    it3         : PDequeueIterator;
-    minLength   : word;
+    minLength   : comp;
+    length      : comp;
+    currentButton, nextButton : TButton;
 begin
   mapKeySequence(NumericKeyPad, numericPad, controlPad1, false, $ffff);
   it := controlPad1^.keySequences_.first;
-  minLength := $ffff;
-
+  minLength := -1;
   while it <> nil do begin
-    mapKeySequence(DirectionalKeyPad, PKeySequenceItem(it^.at), controlPad2, false, $ffff);
-    it2 := controlPad2^.keySequences_.first;
+    length := 0;
+    currentButton := BT_ACCEPT;
+    it2 := PKeySequenceItem(it^.at)^.sequence_.first;
     while it2 <> nil do begin
-      (* To conserve memory and cpu time, no permutation of the last one needed, we only
-         need the fastest sequence 
-       *)
-      mapKeySequence(DirectionalKeyPad, PKeySequenceItem(it2^.at), controlPad3, true, minLength);
+      nextButton := PButtonItem(it2^.at)^.key_;
+      inc(length, findLengthOfSequence(depth, currentButton, nextButton, keyCache^, recurseCache^));
       it2 := it2^.next;
-      if controlPad3 = nil then continue;
-      it3 := controlPad3^.keySequences_.first;
-      while it3 <> nil do begin
-        if minLength > PKeySequenceItem(it3^.at)^.length then begin
-           minLength := PKeySequenceItem(it3^.at)^.length;
-           printKeySequence(PKeySequenceItem(it3^.at));
-        end;
-        it3 := it3^.next;
-      end;
-      Dispose(controlPad3, done);
+      currentButton := nextButton;
     end;
-    Dispose(controlPad2, done);
     it := it^.next;
+    if (minLength = -1) or (minLength > length) then
+      minLength := length;
   end;
   Dispose(controlPad1, done);
   shortestControlSequence := minLength;
 end;
+
+procedure setup(var input : Text);far;
+type PKeySequenceCache = ^TKeySequenceCache;
+     PKeyRecurseCache  = ^TKeyRecurseCache;
+begin
+   keyCache := new(PKeySequenceCache);
+   recurseCache := new(PKeyRecurseCache);
+   intializeCache(keyCache^);
+   FillChar(recurseCache^,SizeOf(TKeyRecurseCache),0);
+end;
+
+procedure cleanup(var input : Text);far;
+begin
+   Dispose(keyCache);
+   Dispose(recurseCache);
+end;
+
 
 function part1(var input: Text):comp; far;
 var pad         : PKeySequenceItem;
@@ -481,7 +553,7 @@ begin
     write(' ');
     printKeySequence(pad);
 
-    tmp := shortestControlSequence(pad);
+    tmp := shortestControlSequence(pad,2);
     Write('Shortest sequence: ');
     writeln(tmp:1);
     sum := sum + number*tmp;
@@ -491,10 +563,28 @@ begin
 end;
 
 function part2(var input: Text):comp; far;
+var pad         : PKeySequenceItem;
+    sum, tmp    : comp;
+    s           : string;
+    number      : comp;
 begin
-  part2 := 0;
+  sum := 0;
+  while not eof(input) do begin
+    readln(input,s);
+    number := buildKeySequenceFromString(s,pad);
+    write(number:1);
+    write(' ');
+    printKeySequence(pad);
+
+    tmp := shortestControlSequence(pad,25);
+    Write('Shortest sequence: ');
+    writeln(tmp:1);
+    sum := sum + number*tmp;
+    Dispose(pad, done);
+  end;
+  part2 := sum;
 end;
 
 begin
-  runAoc(InputFileName, 21, part1, part2, nil, nil);
+  runAoc(InputFileName, 21, part1, part2, setup, cleanup);
 end.
