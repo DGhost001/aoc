@@ -1,7 +1,7 @@
 program day23;
 (*This is the implementation of the aoc24 day 23*)
 
-uses aoc, cassert;
+uses aoc, cassert, ProgressBar;
 const InputFileName = 'INP\DAY23_IN.TXT';
 type TComputerName = string[2];
      TComputerHash = word;
@@ -24,6 +24,12 @@ function hashComputerName(const s:TComputerName) : TComputerHash;
 begin
   assert(length(s) = 2,'Invalid Name');
   hashComputerName := (ord(s[1]) - ord('a'))* 26 + (ord(s[2]) - ord('a'));
+end;
+
+function unhashComputerName(const h:TComputerHash) : TComputerName;
+begin
+  assert((h < 26*26),'Invalid Hash');
+  unhashComputerName := chr((h div 26) + ord('a')) + chr((h mod 26) + ord('a'));
 end;
 
 constructor TComputer.init(const hash : TComputerHash);
@@ -106,8 +112,98 @@ begin
 end;
 
 function part2(var input: Text):comp; far;
+type TNetwork = record
+        computers : array[0..15] of TComputerHash;
+        size : byte;
+     end;
+  function isCandidate(const net: TNetwork; const candidate: TComputer): Boolean;
+  var i: integer;
+  begin
+    isCandidate := true;
+    for i := 0 to net.size - 1 do begin
+      if not candidate.isConnected(computers[net.computers[i]]) then begin
+        isCandidate := false;
+        exit;
+      end;
+    end;
+  end;
+
+  procedure addComputer(var net: TNetwork; const candidate: TComputer);
+  begin
+    assert(net.size <= HIGH(net.computers), 'Network too large');
+    net.computers[net.size] := candidate.hash_;
+    inc(net.size);
+  end;
+
+  procedure clearNetwork(var net: TNetwork);
+  begin
+    net.size := 0;
+  end;
+
+  procedure findBiggestNetwork(const computer: TComputer;
+                               currentNeighbour: byte;
+                               net: TNetwork;
+                               var largestNetwork: TNetwork);
+  begin
+    if currentNeighbour >= computer.numConnections_ then begin
+        if net.size > largestNetwork.size then largestNetwork := net;
+    end else begin
+        if isCandidate(net, computers[computer.connections_[currentNeighbour]]) then begin
+           addComputer(net, computers[computer.connections_[currentNeighbour]]);
+           findBiggestNetwork(computer, currentNeighbour + 1, net, largestNetwork);
+           dec(net.size);
+        end;
+        findBiggestNetwork(computer, currentNeighbour + 1, net, largestNetwork);
+    end;
+  end;
+  
+  procedure removeComputer(var net: TNetwork; const index: byte);
+  var j : byte;
+  begin
+    assert((index < net.size), 'Invalid index to remove');
+    if net.size >= 2 then 
+      for j := index to net.size - 2 do
+          net.computers[j] := net.computers[j+1];
+    dec(net.size);
+  end;
+  
+  procedure printNetwork(net: TNetwork);
+  var minHash: TComputerHash;
+      index,i  : byte;
+  begin
+    while net.size > 0 do begin
+      minHash := net.computers[0];
+      index := 0;
+      for i := 1 to net.size - 1 do begin
+        if net.computers[i] < minHash then begin
+          minHash := net.computers[i];
+          index := i;
+        end;
+      end;
+      write(unhashComputerName(minHash), ',');
+      removeComputer(net, index);
+    end;
+    WriteLn;
+  end; 
+
+var largestNetwork: TNetwork;
+    candidateNetwor: TNetwork;
+    hash, startHash, endHash : TComputerHash;
+    p : TProgressBar;
 begin
-  part2 := 0;
+  clearNetwork(largestNetwork);
+  startHash := hashComputerName('ta');
+  endHash   := hashComputerName('tz');
+  p.init(endHash - startHash + 1,'Search');
+  for hash := startHash to endHash do with computers[hash] do begin
+    clearNetwork(candidateNetwor); (* Clear out the current network *)
+    addComputer(candidateNetwor, computers[hash]); (* Add the current computer *)
+    findBiggestNetwork(computers[hash], 0, candidateNetwor, largestNetwork);
+    p.step(1);
+   end;
+  p.done;
+  printNetwork(largestNetwork);
+  part2 := largestNetwork.size;
 end;
 
 begin
