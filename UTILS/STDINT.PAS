@@ -21,6 +21,10 @@ interface
     procedure xor64(var a,b: Uint64_t);                   (* a:= a xor b *)
     procedure xor32(var a,b: Uint32_t);
 
+    procedure and64(var a: Uint64_t; const b: Uint64_t);                   (* a:= a and b *)
+    procedure or64(var a: Uint64_t; const b: Uint64_t);                    (* a:= a or b *)
+    function test64Bit(const a: Uint64_t; const b: Uint64_t): boolean;          (* (a and b) <> 0 *)
+
     procedure add64(var a,b: Uint64_t);                   (* a:= a + b *)
     procedure add64LongInt(var a: Uint64_t; const b: longint);
 
@@ -716,16 +720,82 @@ end;
 
 {$ELSE}
 procedure shiftLeft64(count: byte; var a: Uint64_t);
+var buffer, carry : word;
+                i : integer;
 begin
-  halt(-1); (*Not implemented yet... *)
+  while count >= 8 do begin
+    a[7]  := a[6]; a[6] := a[5]; a[5] := a[4]; a[4] := a[3];
+    a[3]  := a[2]; a[2] := a[1]; a[1] := a[0];
+    a[0]  := 0;
+    dec(count,8);
+  end;
+
+  while count > 0 do begin
+    carry := 0;
+    for i:= 0 to 7 do begin
+      buffer := a[i];
+      buffer := buffer shl 1;
+      a[i] := (buffer and $ff) or carry;
+      carry := buffer shr 7;
+    end;
+    dec(count);
+  end;
 end;
 
 procedure shiftRight64(count: byte; var a: Uint64_t);
 begin
-  halt(-1); (*Not implemented yet... *)
+  while count >= 8 do begin
+    a[0]  := a[1]; a[1] := a[2]; a[2] := a[3]; a[3] := a[4];
+    a[4]  := a[5]; a[5] := a[6]; a[6] := a[7];
+    a[7]  := 0;
+    dec(count,8);
+  end;
+
+  while count > 0 do begin
+    carry := 0;
+    for i:= 7 downto 0 do begin
+      buffer := a[i];
+      a[i] := (a[i] shr 1) or carry;
+      carry := (buffer and 1) shl 7;
+    end;
+    dec(count);
+  end;
 end;
 {$ENDIF}
 {$ENDIF}
+
+  procedure and64(var a: Uint64_t; const b: Uint64_t);
+  begin
+    a[0] := a[0] and b[0];
+    a[1] := a[1] and b[1];
+    a[2] := a[2] and b[2];
+    a[3] := a[3] and b[3];
+    a[4] := a[4] and b[4];
+    a[5] := a[5] and b[5];
+    a[6] := a[6] and b[6];
+    a[7] := a[7] and b[7];
+  end;
+  
+  procedure or64(var a: Uint64_t; const b: Uint64_t); 
+  begin
+    a[0] := a[0] or b[0];
+    a[1] := a[1] or b[1];
+    a[2] := a[2] or b[2];
+    a[3] := a[3] or b[3];
+    a[4] := a[4] or b[4];
+    a[5] := a[5] or b[5];
+    a[6] := a[6] or b[6];
+    a[7] := a[7] or b[7];
+  end;
+  
+  function test64Bit(const a: Uint64_t; const b: Uint64_t): boolean;
+  begin
+    test64Bit := ((a[0] and b[0]) <> 0) or ((a[1] and b[1]) <> 0) or
+                 ((a[2] and b[2]) <> 0) or ((a[3] and b[3]) <> 0) or
+                 ((a[4] and b[4]) <> 0) or ((a[5] and b[5]) <> 0) or
+                 ((a[6] and b[6]) <> 0) or ((a[7] and b[7]) <> 0);
+  end;
+
 
 function isGreater64(const a,b: Uint64_t): boolean;     (* a > b  *)
 var result: boolean;
