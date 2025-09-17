@@ -16,6 +16,7 @@ type
       constructor init(const index: longint; const item: PItemType);
       destructor done; virtual;
   end;
+  TSparseArrayLambda = procedure (const index: longint; const item: PItemType);
 
   PSparseArray = ^TSparseArray;
   TSparseArray = object
@@ -29,7 +30,8 @@ type
 
       function getMax: PItemType;
 
-      procedure dispose;   
+      procedure dispose;
+      procedure forEach(const lambda: TSparseArrayLambda);   
 
       private
       function findIndex(const index: longint): word;
@@ -163,6 +165,16 @@ begin
       max := e^.value_;
   end;
   getMax := max;
+end;
+
+procedure TSparseArray.forEach(const lambda: TSparseArrayLambda);
+var i : word;
+    e : PSparseElement;
+begin
+  for i:= 0 to length_-1 do begin
+    e := PSparseElement(storage_.at(i));
+    lambda(e^.index_, e^.value_);
+  end;
 end;
 
 begin
