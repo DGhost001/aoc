@@ -23,7 +23,7 @@ interface
 
     procedure and64(var a: Uint64_t; const b: Uint64_t);                   (* a:= a and b *)
     procedure or64(var a: Uint64_t; const b: Uint64_t);                    (* a:= a or b *)
-    function test64Bit(const a: Uint64_t; const b: Uint64_t): boolean;          (* (a and b) <> 0 *)
+    function test64(const a: Uint64_t; const b: Uint64_t): boolean;          (* (a and b) <> 0 *)
 
     procedure add64(var a,b: Uint64_t);                   (* a:= a + b *)
     procedure add64LongInt(var a: Uint64_t; const b: longint);
@@ -736,13 +736,15 @@ begin
       buffer := a[i];
       buffer := buffer shl 1;
       a[i] := (buffer and $ff) or carry;
-      carry := buffer shr 7;
+      carry := buffer shr 8;
     end;
     dec(count);
   end;
 end;
 
 procedure shiftRight64(count: byte; var a: Uint64_t);
+var buffer, carry : word;
+                i : integer;
 begin
   while count >= 8 do begin
     a[0]  := a[1]; a[1] := a[2]; a[2] := a[3]; a[3] := a[4];
@@ -788,14 +790,13 @@ end;
     a[7] := a[7] or b[7];
   end;
   
-  function test64Bit(const a: Uint64_t; const b: Uint64_t): boolean;
+  function test64(const a: Uint64_t; const b: Uint64_t): boolean;
   begin
-    test64Bit := ((a[0] and b[0]) <> 0) or ((a[1] and b[1]) <> 0) or
-                 ((a[2] and b[2]) <> 0) or ((a[3] and b[3]) <> 0) or
-                 ((a[4] and b[4]) <> 0) or ((a[5] and b[5]) <> 0) or
-                 ((a[6] and b[6]) <> 0) or ((a[7] and b[7]) <> 0);
+    test64 := ((a[0] and b[0]) <> 0) or ((a[1] and b[1]) <> 0) or
+               ((a[2] and b[2]) <> 0) or ((a[3] and b[3]) <> 0) or
+               ((a[4] and b[4]) <> 0) or ((a[5] and b[5]) <> 0) or
+               ((a[6] and b[6]) <> 0) or ((a[7] and b[7]) <> 0);
   end;
-
 
 function isGreater64(const a,b: Uint64_t): boolean;     (* a > b  *)
 var result: boolean;
